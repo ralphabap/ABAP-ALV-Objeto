@@ -1,0 +1,1007 @@
+*-----------------------------------------------------------------------
+* WEG EQUIPAMENTOS ELÉTRICOS S.A.
+* Implementador: FAD.
+*
+* ID     Request        Data          Nome
+* DAS    ED0K925473    7/2/2008       Diovani A. da Silva.
+*
+* Descrição: CONCLUSÃO AUTOMÁTICA DE WORKITENS, Para a criação do programa que irá concluir
+* automaticamente os workitens no Workplace de um determinado usuário, deverá ser utilizado
+* como base o programa ZPMMR_019, que já possui algumas regras de seleção de workitens definidas.
+*-----------------------------------------------------------------------
+* Histórico de Alterações do Objeto
+*-----------------------------------------------------------------------
+* ID      Request        Data          Nome
+* RN      ED0K928174     03/03/2008    Ralph Nova
+*
+* Descrição: Criar uma transação para rodar o programa ZPMMR_030. Para
+*            tal, serão necessários alguns controles adicionais para
+*            uso deste programa por alguns usuários de custos.
+*
+************************************************************************
+REPORT  zpmmr_030.
+
+*----------------------------------------------------------------------
+* Includes
+*----------------------------------------------------------------------
+INCLUDE rswwincl.
+
+*----------------------------------------------------------------------
+* Declaração das Tabelas
+*----------------------------------------------------------------------
+TABLES: swwwihead,       "Tempo exec.workflow
+        swhactor,        "Responsáveis pelo wf
+        marc,            "Materiais por centro
+        usr21,           "Atribuição nome usuário chave endereço
+        adrp.            "Pessoas (administração de endereços central)
+
+*----------------------------------------------------------------------
+* Constantes
+*----------------------------------------------------------------------
+CONSTANTS:
+  c_e          TYPE char1                VALUE 'E',                 "Constante E
+  c_x          TYPE char1                VALUE 'X',                 "Constante X
+  c_sign_i     TYPE char1                VALUE 'I',                 "Include
+  c_option_eq  TYPE char2                VALUE 'EQ',                "Igual
+  c_option_ne  TYPE char2                VALUE 'NE',                "Diferente
+  c_solic      TYPE fieldname            VALUE 'SOLIC',             "Campo SOLIC
+  c_material   TYPE fieldname            VALUE 'MATERIAL',          "Campo MATERIAL
+  c_werks      TYPE fieldname            VALUE 'WERKS',             "Campo WERKS
+  c_visao      TYPE fieldname            VALUE 'VISAO',             "Campo VISAO
+  c_mtart      TYPE fieldname            VALUE 'MTART',             "Campo MTART
+  c_beskz      TYPE fieldname            VALUE 'BESKZ',             "Campo BESKZ
+  c_dispo      TYPE fieldname            VALUE 'DISPO',             "Campo DISPO
+  c_wi_id      TYPE fieldname            VALUE 'WI_ID',             "Campo WI_ID
+  c_wi_stat    TYPE fieldname            VALUE 'WI_STAT',           "Campo WI_STAT
+  c_statustext TYPE fieldname            VALUE 'STATUSTEXT',        "Campo STATUSTEXT
+  c_wi_cd      TYPE fieldname            VALUE 'WI_CD',             "Campo WI_CD
+  c_wi_ct      TYPE fieldname            VALUE 'WI_CT',             "Campo WI_CT
+  c_tempo      TYPE fieldname            VALUE 'TEMPO',             "Campo TEMPO
+  c_user       TYPE fieldname            VALUE 'USER',              "Campo USER
+  c_name       TYPE fieldname            VALUE 'NAME',              "Campo NAME
+  c_d_solic    TYPE rollname             VALUE 'ZDEMM_SOLICITACAO', "Elem. solicitacao
+  c_d_matnr    TYPE rollname             VALUE 'MATNR',             "Elem. material
+  c_d_werks    TYPE rollname             VALUE 'WERKS_D',           "Elem. centro
+  c_d_mtart    TYPE rollname             VALUE 'MTART',             "Elem. tipo material
+  c_d_beskz    TYPE rollname             VALUE 'BESKZ',             "Elem. tipo suprimento
+  c_d_dispo    TYPE rollname             VALUE 'DISPO',             "Elem. planejador MRP
+  c_d_visao    TYPE rollname             VALUE 'STTXT',             "Elem. visão
+  c_d_wi_id    TYPE rollname             VALUE 'SWW_WIID',          "Elem. id wf
+  c_d_wi_stat  TYPE rollname             VALUE 'SWW_WISTAT',        "Elem. status wf
+  c_d_stattxt  TYPE rollname             VALUE 'SWW_STATXT',        "Elem. status wf
+  c_d_wi_cd    TYPE rollname             VALUE 'SWW_CD',            "Elem. data wf
+  c_d_wi_ct    TYPE rollname             VALUE 'SWW_CT',            "Elem. hora wf
+  c_d_user     TYPE rollname             VALUE 'ACTORID',           "Elem. usuário
+  c_d_name     TYPE rollname             VALUE 'AD_NAMTEXT',        "Elem. usuário
+  c_catid_bo   TYPE sww_wi2obj-catid     VALUE 'BO',                "Elem. BOR
+  c_typeid_bus TYPE sww_wi2obj-typeid    VALUE 'BUS1001006',        "WF Material
+  c_task_atv   TYPE swwwihead-wi_rh_task VALUE 'TS90000027',        "Atividade das Áreas
+  c_task_flt   TYPE swwwihead-wi_rh_task VALUE 'TS90000085',        "Falta fluxo de workflow
+  c_task_err   TYPE swwwihead-wi_rh_task VALUE 'TS90000074',        "Verificação de erro
+  c_metric(4)  TYPE c                    VALUE '0001'.              "Contaner
+
+*----------------------------------------------------------------------
+* Declaração das Estruturas
+*----------------------------------------------------------------------
+
+TYPES: BEGIN OF y_log,
+          matnr TYPE mara-matnr,                  "código do material
+          werks TYPE marc-werks,                  "centro
+          wi_id TYPE swwwihead-wi_id,             "identificação work item
+          user  TYPE usr21-bname,                 "nome do usuário no mestre de usuários
+          wi_cd TYPE swwwihead-wi_cd,             "data de geração de um work item
+          wi_ct TYPE swwwihead-wi_ct,             "hora de geração de um work item
+          erro   TYPE string,                     "descrição do erro
+       END OF y_log.
+
+TYPES: BEGIN OF y_workitens,                       "seleção de workitens
+         solic      TYPE ztbmm_016-nr_solicitacao, "solicitação
+         material   TYPE mara-matnr,               "código do material
+         werks      TYPE marc-werks,               "Centro
+         visao      TYPE swwwihead-wi_text,        "Visão
+         wi_id      TYPE swwwihead-wi_id,          "código do wi
+         top_wi_id  TYPE swwwihead-top_wi_id,      "código do wi pai
+         wi_stat    TYPE swwwihead-wi_stat,        "status do wi
+         statustext TYPE swwstatext-statustext,    "descrição do status
+         wi_cd      TYPE swwwihead-wi_cd,          "data de geração do wi
+         wi_ct      TYPE swwwihead-wi_ct,          "hora de geração do wi
+         parent_wi  TYPE swwwihead-parent_wi,      "atividade superior
+         wi_text    TYPE swwwihead-wi_text,        "texto do wf
+         wi_rh_task TYPE swwwihead-wi_rh_task,     "tarefa wf
+         mtart      TYPE mara-mtart,               "tipo de material
+         beskz      TYPE marc-beskz,               "tipo de suprimento
+         dispo      TYPE marc-dispo,               "planejador MRP
+         tempo      TYPE char18,                   "tempo de espera
+         user       TYPE swhactor-objid,           "login do usuário
+         name       TYPE adrp-name_text,           "nome completo
+       END OF y_workitens.
+
+TYPES: BEGIN OF y_users,
+         user      TYPE usr21-bname,             "login do usuário
+         name      TYPE adrp-name_text,          "nome completo
+       END OF y_users.
+
+TYPES: BEGIN OF y_mara,
+         matnr  TYPE mara-matnr,          "Material
+         werks  TYPE marc-werks,          "Centro
+         mtart  TYPE mara-mtart,          "Tipo de material
+         beskz  TYPE marc-beskz,          "Tipo de suprimento
+         dispo  TYPE marc-dispo,          "Planejador MRP
+         instid TYPE sww_wi2obj-instid,   "Objeto
+       END OF y_mara.
+
+TYPES: BEGIN OF y_wi2obj,
+         top_wi_id TYPE sww_wi2obj-top_wi_id, "Workflow: GUID da instância nível superior (6.1/get)
+         catid     TYPE sww_wi2obj-catid,     "Categorias de objetos em referências a objetos persistentes
+         instid    TYPE sww_wi2obj-instid,    "ID instância compat.em BOR Referências a objs.persistentes
+         typeid    TYPE sww_wi2obj-typeid,    "Tipo de objetos em referências a objetos persistentes
+       END OF y_wi2obj.
+
+TYPES: BEGIN OF y_saida,
+         matnr TYPE mara-matnr,           "Matereiais
+         werks TYPE marc-werks,           "Centro
+         wi_id TYPE swwwihead-wi_id,      "Código do workitem
+         user  TYPE usr21-bname,          "Usuário
+         wi_cd TYPE swwwihead-wi_cd,      "Data de criação do workitem
+         wi_ct TYPE swwwihead-wi_ct,      "Hora de criação do workitem
+       END OF y_saida.
+
+*----------------------------------------------------------------------
+* Declaração das Tabelas Internas
+*----------------------------------------------------------------------
+DATA: t_agents       TYPE TABLE OF swhactor,  "agentes responsáveis
+      t_workitens    TYPE TABLE OF y_workitens, "workitens
+      t_print        TYPE TABLE OF y_workitens, "seleção final
+      t_saida        TYPE TABLE OF y_saida,     "tabela de saída
+      t_users        TYPE TABLE OF y_users,     "usuários e nomes
+      t_mara         TYPE TABLE OF y_mara,      "material
+      t_wi2obj       TYPE TABLE OF y_wi2obj,    "objetos do material
+      t_wi_container TYPE TABLE OF swcont,      "elementos do container
+      t_fieldcat     TYPE lvc_t_fcat,           "colunas do relatório
+      t_sort         TYPE lvc_t_sort,           "colunas ordenadas
+      t_log          TYPE TABLE OF y_log.       "tabela de log das execuções
+
+*----------------------------------------------------------------------
+* Declaração dos Objetos
+*----------------------------------------------------------------------
+DATA: o_cont              TYPE REF TO cl_gui_container,  "área para impressão
+      o_alv               TYPE REF TO cl_gui_alv_grid,          "relatório ALV
+* >>> RN 03/03/2008
+      o_splitter          TYPE REF TO cl_gui_splitter_container,        "Divisão de tela - Cabeçalho
+      o_cont_cab          TYPE REF TO cl_gui_container,          "Container para o Cabeçalho
+      it_list_commentary  TYPE slis_t_listheader, "Cabeçalho
+      ls_line             TYPE slis_listheader.   "Cabeçalho
+* <<< RN 03/03/2008
+
+*----------------------------------------------------------------------
+* Declaração das Work Areas
+*----------------------------------------------------------------------
+DATA: wa_layout    TYPE lvc_s_layo,              "definição do layout
+      wa_fieldcat  LIKE LINE OF t_fieldcat,      "definição das colunas
+      wa_sort      LIKE LINE OF t_sort,          "definição das colunas ordenadas
+      wa_print     LIKE LINE OF t_print,         "workarea para impressão
+      wa_log       LIKE LINE OF t_print,         "workarea para visualização do log
+      wa_users     TYPE y_users,                 "workarea de usuários
+      wa_mara      TYPE y_mara,                  "material
+      wa_container LIKE LINE OF t_wi_container,  "workarea de container
+      wa_log_r     TYPE y_log.                   "log de resultado
+
+*----------------------------------------------------------------------
+* Declaração das Variáveis locais
+*----------------------------------------------------------------------
+DATA: vl_start_date TYPE sy-datum,                 "data de início da seleção
+      vl_time_diff  TYPE mcwmit-be_ae,             "tempo de diferença
+      vl_h_diff(5)  TYPE c,                        "horas de diferença
+      vl_m_diff(5)  TYPE c,                        "minutos de diferença
+      vl_wi_sup     TYPE swwwihead-wi_chckwi,      "id workitem superior
+      vl_solic      TYPE ztbmm_016-nr_solicitacao, "número da solicitação
+      vl_material   TYPE mara-matnr,               "código do material
+      ok_code       TYPE sy-ucomm.                 "botão de OK
+
+*----------------------------------------------------------------------
+* Declaração de Ranges
+*----------------------------------------------------------------------
+RANGES:
+  r_stat FOR swwwihead-wi_stat,                    "Status
+  r_task FOR swwwihead-wi_rh_task.                 "Tarefas
+
+*----------------------------------------------------------------------
+* Declaração dos fields symbols
+*----------------------------------------------------------------------
+FIELD-SYMBOLS: <fs_workitens> TYPE y_workitens,   "workitens
+               <fs_agents>    TYPE swhactor.    "agentes
+
+*----------------------------------------------------------------------
+* Definição da Classe ZCL_OPEN_LOG, a qual é responsável pelo tratamento
+* do duplo clique
+*----------------------------------------------------------------------
+CLASS zcl_open_log DEFINITION.
+
+  PUBLIC SECTION.
+    METHODS trata_dc FOR EVENT double_click OF cl_gui_alv_grid IMPORTING e_row.
+
+  PRIVATE SECTION.
+    METHODS buscar_log IMPORTING value(linha) TYPE n.
+
+ENDCLASS.                    "zcl_open_log DEFINITION
+*
+**----------------------------------------------------------------------
+** Implementação da Classe ZCL_OPEN_LOG
+**----------------------------------------------------------------------
+CLASS zcl_open_log IMPLEMENTATION.
+
+  METHOD trata_dc.
+* Não exibir detalhes
+*    buscar_log( e_row-index ).
+  ENDMETHOD.                    "trata_dc
+
+  METHOD buscar_log.
+    READ TABLE t_print INTO wa_log INDEX linha.
+
+    SELECT SINGLE top_wi_id
+      INTO vl_wi_sup
+      FROM swwwihead
+     WHERE wi_id = wa_log-wi_id.
+    IF sy-subrc <> 0.
+      MESSAGE text-003 TYPE c_e.
+      EXIT.
+    ENDIF.
+
+    CALL FUNCTION 'SWL_WI_DISPLAY'
+      EXPORTING
+        wi_id       = vl_wi_sup
+      EXCEPTIONS
+        read_failed = 1
+        OTHERS      = 2.
+    IF sy-subrc <> 0.
+      MESSAGE text-003 TYPE c_e.
+    ENDIF.
+
+  ENDMETHOD.                    "buscar_log
+
+ENDCLASS.                    "zcl_open_log IMPLEMENTATION
+*
+**----------------------------------------------------------------------
+** Declaração do objeto O_LOG que faz referência à classe ZCL_OPEN_LOG
+**----------------------------------------------------------------------
+DATA: o_log TYPE REF TO zcl_open_log.
+*
+*----------------------------------------------------------------------
+* Área para seleção dos dados iniciais
+*----------------------------------------------------------------------
+SELECTION-SCREEN BEGIN OF BLOCK task_time WITH FRAME TITLE text-004.
+
+SELECT-OPTIONS: s_matnr FOR marc-matnr OBLIGATORY.    "Material
+
+PARAMETERS: p_werks TYPE marc-werks OBLIGATORY,
+            p_user  TYPE sy-uname   MODIF ID p01 OBLIGATORY,                                     "Código
+            p_path  TYPE string     MODIF ID p01 OBLIGATORY DEFAULT 'C:\log_erro_workitens.txt'. "Path
+
+SELECTION-SCREEN END OF BLOCK task_time.
+
+*----------------------------------------------------------------------
+* Start-of-selection
+*----------------------------------------------------------------------
+START-OF-SELECTION.
+
+* Seleciona dados
+  PERFORM zf_seleciona_dados.
+
+* Processa dados
+  PERFORM zf_processa_dados.
+
+* Verifica se algum dado foi encontrado
+  IF t_print[] IS INITIAL.
+    MESSAGE text-002 TYPE 'I'.
+    EXIT.
+  ENDIF.
+
+* Mostra GRID
+  CALL SCREEN 9000.
+
+**----------------------------------------------------------------------
+
+**&---------------------------------------------------------------------*
+**&      Form  zf_seleciona_dados
+**&---------------------------------------------------------------------*
+**       Seleciona dados do workflow
+**----------------------------------------------------------------------*
+FORM zf_seleciona_dados.
+
+*----------------------------------------------------------------------
+* Determina o intervalo de tempo para seleção dos dados, de acordo
+* com a quantidade de dias passadas pelo parâmetro de seleção
+*----------------------------------------------------------------------
+
+* Monta range com as tarefas
+  r_task-sign   = c_sign_i.
+  r_task-option = c_option_eq.
+  r_task-low    = c_task_atv.
+  APPEND r_task.
+  r_task-low    = c_task_flt.
+  APPEND r_task.
+  r_task-low    = c_task_err.
+  APPEND r_task.
+  CLEAR  r_task.
+
+* Monta range com status
+  r_stat-sign   = c_sign_i.
+  r_stat-option = c_option_ne.
+  r_stat-low    = wi_status_completed.
+  APPEND r_stat.
+  r_stat-low    = wi_status_cancelled.
+  APPEND r_stat.
+  CLEAR  r_stat.
+
+  IF NOT s_matnr[] IS INITIAL.
+
+*----------------------------------------------------------------------
+* Dados do material
+*----------------------------------------------------------------------
+    SELECT mara~matnr werks mtart beskz dispo mara~matnr
+      INTO TABLE t_mara
+      FROM mara
+     INNER JOIN marc
+        ON mara~matnr = marc~matnr
+     WHERE mara~matnr IN s_matnr.
+
+    IF sy-subrc EQ 0.
+
+      SORT t_mara BY matnr werks.
+
+      SELECT top_wi_id catid instid typeid
+        INTO TABLE t_wi2obj
+        FROM sww_wi2obj
+         FOR ALL ENTRIES IN t_mara
+       WHERE catid  = c_catid_bo
+         AND instid = t_mara-instid
+         AND typeid = c_typeid_bus.
+
+      IF sy-subrc EQ 0.
+
+        SORT t_wi2obj BY top_wi_id.
+
+* Seleciona dados do workflow
+        SELECT wi_id top_wi_id wi_stat wi_cd wi_ct parent_wi wi_text wi_rh_task
+          INTO CORRESPONDING FIELDS OF TABLE t_workitens
+          FROM swwwihead
+           FOR ALL ENTRIES IN t_wi2obj
+         WHERE
+           top_wi_id  EQ t_wi2obj-top_wi_id
+           AND wi_rh_task IN r_task
+           AND wi_stat    IN r_stat.
+
+      ENDIF.
+
+    ENDIF.
+
+  ENDIF.
+
+ENDFORM.                    " zf_seleciona_dados
+
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_9000  OUTPUT
+*&---------------------------------------------------------------------*
+*       Código que é executado nos eventos do GRID
+*----------------------------------------------------------------------*
+MODULE status_9000 OUTPUT.
+
+  SET PF-STATUS 'ZPF9000'.
+  SET TITLEBAR  'ZPF9000'.
+
+ENDMODULE.                 " STATUS_9000  OUTPUT
+*
+**&---------------------------------------------------------------------*
+**&      Form  zf_monta_fieldcat
+**&---------------------------------------------------------------------*
+**       Monta catálogo de campos
+**----------------------------------------------------------------------*
+FORM zf_monta_fieldcat.
+
+  REFRESH t_fieldcat.
+
+  CLEAR wa_fieldcat.
+  wa_fieldcat-dd_roll   = c_d_matnr.
+  wa_fieldcat-fieldname = 'MATNR'.
+  wa_fieldcat-col_pos   = 2.
+  wa_fieldcat-reptext   = 'Material'.
+  wa_fieldcat-outputlen = 10.
+  wa_fieldcat-convexit  = 'MATN1'.
+  APPEND wa_fieldcat TO t_fieldcat.
+
+  CLEAR wa_fieldcat.
+  wa_fieldcat-dd_roll   = c_d_werks.
+  wa_fieldcat-fieldname = c_werks.
+  wa_fieldcat-col_pos   = 3.
+  wa_fieldcat-reptext   = 'Centro'.
+  wa_fieldcat-outputlen = 10.
+  APPEND wa_fieldcat TO t_fieldcat.
+
+  CLEAR wa_fieldcat.
+  wa_fieldcat-dd_roll   = c_d_wi_id.
+  wa_fieldcat-fieldname = c_wi_id.
+  wa_fieldcat-col_pos   = 8.
+  wa_fieldcat-reptext   = 'Workitem'.
+  wa_fieldcat-outputlen = 10.
+  APPEND wa_fieldcat TO t_fieldcat.
+
+  CLEAR wa_fieldcat.
+  wa_fieldcat-dd_roll   = c_d_user.
+  wa_fieldcat-fieldname = c_user.
+  wa_fieldcat-col_pos   = 14.
+  wa_fieldcat-reptext   = 'ID Responsável'.
+  wa_fieldcat-outputlen = 12.
+  APPEND wa_fieldcat TO t_fieldcat.
+
+  CLEAR wa_fieldcat.
+  wa_fieldcat-dd_roll   = c_d_wi_cd.
+  wa_fieldcat-fieldname = c_wi_cd.
+  wa_fieldcat-col_pos   = 11.
+  wa_fieldcat-reptext   = 'Dt.Geração'.
+  wa_fieldcat-outputlen = 10.
+  APPEND wa_fieldcat TO t_fieldcat.
+
+  CLEAR wa_fieldcat.
+  wa_fieldcat-dd_roll   = c_d_wi_ct.
+  wa_fieldcat-fieldname = c_wi_ct.
+  wa_fieldcat-col_pos   = 12.
+  wa_fieldcat-reptext   = 'Hr.Geração'.
+  wa_fieldcat-outputlen = 10.
+  APPEND wa_fieldcat TO t_fieldcat.
+
+  CLEAR wa_fieldcat.
+  wa_fieldcat-dd_roll   = c_d_wi_ct.
+  wa_fieldcat-fieldname = 'CHECK'.
+  wa_fieldcat-col_pos   = 15.
+  wa_fieldcat-reptext   = 'Marcar'.
+  wa_fieldcat-outputlen = 0.
+  wa_fieldcat-checkbox  = 'X'.
+  wa_fieldcat-edit      =  'X'.
+  wa_fieldcat-no_out    = 'X'.
+  APPEND wa_fieldcat TO t_fieldcat.
+
+*----------------------------------------------------------------------
+* Definição das características do relatório ALV
+*----------------------------------------------------------------------
+  wa_layout-grid_title = 'Login do Usuário'.
+  wa_layout-zebra      = c_x.
+  wa_layout-cwidth_opt = c_x.
+  wa_layout-sel_mode = c_x.
+
+ENDFORM.                    " zf_monta_fieldcat
+
+
+*&---------------------------------------------------------------------*
+*&      Form  zf_monta_saida
+*&---------------------------------------------------------------------*
+*       Monta saída com os dados do relatório
+*----------------------------------------------------------------------*
+FORM zf_monta_saida.
+
+  DATA:
+        wa_print TYPE  y_workitens,
+        wa_saida TYPE  y_saida.
+
+  REFRESH t_saida.
+  LOOP AT t_print INTO wa_print.
+
+    CLEAR wa_saida.
+    wa_saida-matnr = wa_print-material.
+    wa_saida-werks = wa_print-werks.
+    wa_saida-wi_id = wa_print-wi_id.
+    wa_saida-user  = wa_print-user.
+    wa_saida-wi_cd = wa_print-wi_cd.
+    wa_saida-wi_ct = wa_print-wi_ct.
+    APPEND wa_saida TO t_saida.
+
+  ENDLOOP.
+
+ENDFORM.                    " zf_monta_saida
+
+
+*&---------------------------------------------------------------------*
+*&      Form  zf_processa_dados
+*&---------------------------------------------------------------------*
+*       Processamento dos dados
+*----------------------------------------------------------------------*
+FORM zf_processa_dados.
+
+  LOOP AT t_workitens ASSIGNING <fs_workitens>.
+
+* Busca todos os elementos do container pai
+    CALL FUNCTION 'SWW_WI_CONTAINER_READ'
+      EXPORTING
+        wi_id                    = <fs_workitens>-top_wi_id
+      TABLES
+        wi_container             = t_wi_container
+      EXCEPTIONS
+        container_does_not_exist = 1
+        read_failed              = 2
+        OTHERS                   = 3.
+    IF sy-subrc = 0.
+      SORT t_wi_container BY element.
+
+      READ TABLE t_wi_container INTO wa_container WITH KEY element = 'SOLICITNUMBER'.
+      IF sy-subrc = 0.
+        <fs_workitens>-solic = wa_container-value.
+      ELSE.
+        <fs_workitens>-solic = 'N/A'.
+      ENDIF.
+
+*----------------------------------------------------------------------
+* Limpa a workarea e busca o elemento 'STANDARDMATERIAL'
+*----------------------------------------------------------------------
+      CLEAR wa_container.
+
+      READ TABLE t_wi_container INTO wa_container WITH KEY element = 'STANDARDMATERIAL'.
+      IF sy-subrc = 0.
+        CONDENSE wa_container-value.
+        <fs_workitens>-material = wa_container-value+10.
+      ENDIF.
+    ENDIF.
+
+* Verifica se material está no range
+    CHECK <fs_workitens>-material IN s_matnr.
+
+*----------------------------------------------------------------------
+* Com o id do workitem pai, busca todos os elementos do container
+*----------------------------------------------------------------------
+    CALL FUNCTION 'SWW_WI_CONTAINER_READ'
+      EXPORTING
+        wi_id                    = <fs_workitens>-wi_id
+      TABLES
+        wi_container             = t_wi_container
+      EXCEPTIONS
+        container_does_not_exist = 1
+        read_failed              = 2
+        OTHERS                   = 3.
+    IF sy-subrc = 0.
+*----------------------------------------------------------------------
+* Limpa a workarea e busca o elemento 'CENTRO'
+*----------------------------------------------------------------------
+      READ TABLE t_wi_container INTO wa_container WITH KEY element = 'CENTRO'.
+      IF sy-subrc = 0.
+        CONDENSE wa_container-value.
+
+        <fs_workitens>-werks = wa_container-value.
+      ENDIF.
+
+*----------------------------------------------------------------------
+* Limpa a workarea e busca o elemento 'TEXTOEMAIL'
+*----------------------------------------------------------------------
+      READ TABLE t_wi_container INTO wa_container WITH KEY element = 'TEXTOEMAIL'.
+      IF sy-subrc = 0.
+        CONDENSE wa_container-value.
+        <fs_workitens>-visao = wa_container-value.
+      ENDIF.
+    ENDIF.
+
+* Falta fluxo de workflow
+    IF <fs_workitens>-wi_rh_task = c_task_flt.
+      <fs_workitens>-visao = <fs_workitens>-wi_text.
+    ENDIF.
+
+* >>> RN 03/03/2008
+* Verifica se centro está no range
+    CHECK <fs_workitens>-werks = p_werks.
+* <<< RN 03/03/2008
+
+*----------------------------------------------------------------------
+* Para cada registro da tabela de workitens, chama a função que retorna,
+* em minutos, a diferença entre duas datas.
+*----------------------------------------------------------------------
+    CALL FUNCTION 'L_MC_TIME_DIFFERENCE'
+      EXPORTING
+        date_from       = <fs_workitens>-wi_cd
+        date_to         = sy-datum
+        time_from       = <fs_workitens>-wi_ct
+        time_to         = sy-uzeit
+      IMPORTING
+        delta_time      = vl_time_diff
+      EXCEPTIONS
+        from_greater_to = 1
+        OTHERS          = 2.
+
+*----------------------------------------------------------------------
+* Realiza cálculos com os minutos recebidos através da função, para
+* determinar a quantidade exata de horas e minutos
+*----------------------------------------------------------------------
+    vl_h_diff = vl_time_diff DIV 60.
+    vl_m_diff = vl_time_diff MOD 60.
+
+    CONDENSE vl_h_diff.
+    CONDENSE vl_m_diff.
+
+*----------------------------------------------------------------------
+* Caso a quantidade de caracteres das variáveis de horas e minutos seja
+* menor que 2, insere um caracter '0' a esquerda de cada variável
+*----------------------------------------------------------------------
+    IF STRLEN( vl_h_diff ) < 2.
+      CONCATENATE '0' vl_h_diff INTO vl_h_diff.
+    ENDIF.
+
+    IF STRLEN( vl_m_diff ) < 2.
+      CONCATENATE '0' vl_m_diff INTO vl_m_diff.
+    ENDIF.
+
+*----------------------------------------------------------------------
+* Concatena as variáveis de hora e minuto, mais os caracteres '00' para
+* formar o tempo de espera do workitem, e grava no campo da tabela
+* de workitens para exibição no relatório ALV
+*----------------------------------------------------------------------
+    CONCATENATE vl_h_diff ':' vl_m_diff ':00' INTO <fs_workitens>-tempo.
+
+* Texto do status
+    CALL FUNCTION 'SWL_GET_WI_STATUS_TEXT'
+      EXPORTING
+        wi_status     = <fs_workitens>-wi_stat
+      IMPORTING
+        wi_status_txt = <fs_workitens>-statustext.
+
+*----------------------------------------------------------------------
+* Para cada registro da tabela de workitens, chama a função que retorna
+* os agentes responsáveis
+*----------------------------------------------------------------------
+    CALL FUNCTION 'RH_WI_ORGTASK_READ'
+      EXPORTING
+        wi_id       = <fs_workitens>-wi_id
+      TABLES
+        wi_agents   = t_agents
+      EXCEPTIONS
+        read_failed = 1
+        OTHERS      = 2.
+    IF sy-subrc <> 0.
+      REFRESH: t_agents.
+    ENDIF.
+
+*----------------------------------------------------------------------
+* Faz um loop para cada registro da tabela interna de agentes, e para
+* cada registro desta tabela adiciona um novo registro da tabela de
+* workitens, transferindo todos para uma nova tabela interna
+*----------------------------------------------------------------------
+    LOOP AT t_agents ASSIGNING <fs_agents>.
+      <fs_workitens>-user = <fs_agents>-objid.
+* Insere responsáveis
+      IF <fs_workitens>-user = p_user.
+        INSERT <fs_workitens> INTO TABLE t_print.
+      ENDIF.
+    ENDLOOP.
+
+  ENDLOOP.
+
+*----------------------------------------------------------------------
+* Dados do material
+*----------------------------------------------------------------------
+  SELECT mara~matnr werks mtart beskz dispo
+    INTO TABLE t_mara
+    FROM mara
+   INNER JOIN marc
+      ON mara~matnr = marc~matnr
+     FOR ALL entries IN t_print
+   WHERE mara~matnr = t_print-material.
+  IF sy-subrc EQ 0.
+    SORT t_mara BY matnr werks.
+  ENDIF.
+
+*----------------------------------------------------------------------
+* Faz um JOIN entre as tabelas USR21 e ADRP buscando o nome completo
+* de todos os usuários da tabela interna T_PRINT
+*----------------------------------------------------------------------
+  SELECT u~bname a~name_text
+    INTO TABLE t_users
+    FROM ( usr21 AS u
+   INNER JOIN adrp AS a ON a~persnumber = u~persnumber )
+     FOR ALL ENTRIES IN t_print
+   WHERE u~bname = t_print-user.
+  IF sy-subrc = 0.
+    SORT t_users BY user.
+  ENDIF.
+
+* Atualiza dados
+  LOOP AT t_print INTO wa_print.
+
+    READ TABLE t_users INTO wa_users WITH KEY user = wa_print-user
+                       BINARY SEARCH.
+
+    IF sy-subrc = 0.
+      wa_print-name = wa_users-name.
+    ENDIF.
+
+    READ TABLE t_mara WITH KEY matnr = wa_print-material
+                               werks = wa_print-werks
+                      INTO wa_mara.
+    IF sy-subrc EQ 0.
+      wa_print-mtart = wa_mara-mtart.
+      wa_print-beskz = wa_mara-beskz.
+      wa_print-dispo = wa_mara-dispo.
+    ENDIF.
+
+    MODIFY t_print FROM wa_print.
+
+  ENDLOOP.
+
+ENDFORM.                    " zf_processa_dados
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_9000  INPUT
+*&---------------------------------------------------------------------*
+*       Trata os cicks do menu da tela
+*----------------------------------------------------------------------*
+MODULE user_command_9000 INPUT.
+
+  DATA:
+* Internal table for indexes of selected rows
+     gi_index_rows  TYPE lvc_t_row,
+     l_lines        TYPE i,
+     wa_saida       TYPE y_saida,
+     vl_status      LIKE swwwihead-wi_stat,
+
+* Information about 1 row
+     g_selected_row LIKE lvc_s_row.
+
+* >>> RN 03/03/2008
+  CASE ok_code.
+
+    WHEN 'EXEC'.
+* <<< RN 03/03/2008
+
+      CALL METHOD o_alv->get_selected_rows
+        IMPORTING
+          et_index_rows = gi_index_rows.
+
+* Pega a quantidade de linhas
+      DESCRIBE TABLE gi_index_rows LINES l_lines.
+
+      IF l_lines = 0.
+
+        CALL FUNCTION 'POPUP_TO_DISPLAY_TEXT'
+          EXPORTING
+            textline1 = 'Nenhuma linha selecionada'.
+        EXIT.
+
+      ENDIF.
+
+      " Limpa tabela de log
+      REFRESH t_log.
+
+      LOOP AT gi_index_rows INTO g_selected_row.
+
+        READ TABLE t_saida INDEX g_selected_row-index INTO wa_saida.
+
+        CALL FUNCTION 'SWW_WI_ADMIN_COMPLETE'
+          EXPORTING
+            wi_id                       = wa_saida-wi_id
+            do_commit                   = c_x
+            authorization_checked       = c_x
+            preconditions_checked       = c_x
+            executed_by_user            = p_user
+          IMPORTING
+            new_status                  = vl_status
+          EXCEPTIONS
+            update_failed               = 1
+            no_authorization            = 2
+            infeasible_state_transition = 3
+            OTHERS                      = 4.
+
+        " Limpa variável de LOG
+        CLEAR wa_log_r.
+
+        " Se ocorreram erros
+        IF sy-subrc <> 0.
+
+          "Valores do Log
+          wa_log_r-matnr  = wa_saida-matnr.
+          wa_log_r-werks  = wa_saida-werks.
+          wa_log_r-wi_id  = wa_saida-wi_id.
+          wa_log_r-user  = wa_saida-user.
+          wa_log_r-wi_cd = wa_saida-wi_cd.
+          wa_log_r-wi_ct = wa_saida-wi_ct.
+
+          " Log de erros
+          IF sy-subrc = 1.
+            wa_log_r-erro = 'UPDATED_FAILED'.
+          ELSEIF sy-subrc = 2.
+            wa_log_r-erro = 'NO_AUTHORIZATION'.
+          ELSEIF sy-subrc = 3.
+            wa_log_r-erro = 'INFEASIBLE_STATE_TRANSITION'.
+          ELSEIF sy-subrc = 4.
+            wa_log_r-erro = 'OTHERS'.
+          ELSE.
+            wa_log_r-erro = 'OK'.
+          ENDIF.
+
+          APPEND wa_log_r TO t_log.
+
+        ENDIF.
+
+      ENDLOOP.
+
+      CALL FUNCTION 'ZFAB_FILE_DOWNLOAD'
+        EXPORTING
+          p_file        = p_path
+          p_from_server = space
+        TABLES
+          t_data        = t_log.
+
+      SET SCREEN 0.
+
+* >>> RN 03/03/2008
+  ENDCASE.
+* <<< RN 03/03/2008
+
+ENDMODULE.                 " USER_COMMAND_9000  INPUT
+
+*&---------------------------------------------------------------------*
+*&      Module  EXIT  INPUT
+*&---------------------------------------------------------------------*
+*       Exit
+*----------------------------------------------------------------------*
+MODULE exit INPUT.
+
+* Menu de retorno
+  SET SCREEN 0.
+
+ENDMODULE.                 " EXIT  INPUT
+
+* >>> RN 03/03/2008
+*&---------------------------------------------------------------------*
+*&      Module  mostra_alv  OUTPUT
+*&---------------------------------------------------------------------*
+*       Cria os objetos e chama o ALV
+*----------------------------------------------------------------------*
+MODULE mostra_alv OUTPUT.
+
+* >>> RN 03/03/2008
+* Monta Saída
+  PERFORM zf_monta_saida.
+
+* Monta fieldcat
+  PERFORM zf_monta_fieldcat.
+
+  IF o_splitter IS INITIAL.
+* Cria o objeto Split Container para inserir o ALV,
+* utilizando duas linhas para colocar o cabeçalho na primeira
+    CREATE OBJECT o_splitter
+      EXPORTING
+        parent  = cl_gui_container=>default_screen
+        rows    = 2
+        columns = 1
+        metric  = c_metric.
+
+* Define o tamanho da linha 1
+    CALL METHOD o_splitter->set_row_height
+      EXPORTING
+        id                = 1
+        height            = 20
+      EXCEPTIONS
+        cntl_error        = 1
+        cntl_system_error = 2
+        OTHERS            = 3.
+  ENDIF.
+
+* Define o o_cont_cab com o container de row = 1 e col = 1 do splitter para inserir o cabeçalho
+  o_cont_cab = o_splitter->get_container( row = 1 column = 1 ).
+
+* Define o o_cont com o container de row = 2 e col = 1 do splitter para inserir o ALV
+  o_cont = o_splitter->get_container( row = 2 column = 1 ).
+
+* Monta os dados para o cabeçalho do ALV
+  PERFORM zf_monta_cabecalho.
+
+  EXPORT alv_form_html FROM abap_true
+    TO MEMORY ID 'ALV_FORM_HTML'.
+
+* Monta a estrutura de dados na memória
+  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+    EXPORTING
+      it_list_commentary = it_list_commentary
+      i_alv_form         = 'X'.
+
+* Variável para o conteúdo do cabeçalho
+  DATA: lr_content TYPE REF TO cl_salv_form_element.
+
+  lr_content = cl_salv_form_content=>get( ).
+
+* Objeto HTML Viewer
+  DATA o_html TYPE REF TO cl_gui_html_viewer.
+
+  CREATE OBJECT o_html
+    EXPORTING
+      parent             = o_cont_cab
+    EXCEPTIONS
+      cntl_error         = 1
+      cntl_install_error = 2
+      dp_install_error   = 3
+      dp_error           = 4
+      OTHERS             = 5.
+
+* Objeto para gerar o código html
+  DATA o_dydos TYPE REF TO cl_salv_form_dydos.
+
+  CREATE OBJECT o_dydos
+    EXPORTING
+      r_container = o_cont_cab " Container onde será gerado o HTML
+      r_html_view = o_html         " Objeto da classe HTML Viewer
+      r_content   = lr_content.       " Conteúdo formatado para exibição
+
+* Mostra o HTML no Container selecionado
+  CALL METHOD o_dydos->if_salv_form_abstract~display.
+
+* Se o objeto ainda~não foi criado então cria
+  IF o_alv IS INITIAL.
+
+* Cria um objeto para o relatório ALV, passando o objeto da área de
+* exibição
+    CREATE OBJECT o_alv
+      EXPORTING
+        i_parent = o_cont.
+
+* Cria um objeto para o tratamento do duplo clique e visualização
+* do log
+    CREATE OBJECT o_log.
+
+* Atribue ao objeto do relatório ALV o tratamento do duplo clique
+    SET HANDLER o_log->trata_dc FOR o_alv.
+
+* Chama o método para impressão do relatório ALV, passando os dados
+* que deverão ser impressos, as colunas e a ordenação
+    CALL METHOD o_alv->set_table_for_first_display
+      EXPORTING
+        i_structure_name = 'y_saida'
+        is_layout        = wa_layout
+      CHANGING
+        it_outtab        = t_saida
+        it_fieldcatalog  = t_fieldcat.
+
+  ELSE.
+
+* Só executa um refresh na tabela do ALV
+    CALL METHOD o_alv->refresh_table_display.
+
+  ENDIF.
+* <<< RN 03/03/2008
+
+ENDMODULE.                 " mostra_alv  OUTPUT
+
+*&---------------------------------------------------------------------*
+*&      Form  zf_monta_cabecalho
+*&---------------------------------------------------------------------*
+*       Monta estrutura do cabeçalho
+*----------------------------------------------------------------------*
+FORM zf_monta_cabecalho .
+
+* Variáveis
+  DATA: vl_qtd_reg  TYPE i. "Quantidade de registros
+
+* Limpa tabela com o cabeçalho
+  REFRESH it_list_commentary[].
+
+* Preenche tabela com o cabeçalho
+  CLEAR ls_line.
+  ls_line-typ = 'H'.
+  ls_line-info = 'Conclusão Automática de Workintens'.
+  APPEND ls_line TO it_list_commentary.
+
+* Data
+  CLEAR ls_line.
+  ls_line-typ = 'S'.
+  ls_line-key = 'Data: '.
+  ls_line-info = sy-datum.
+  APPEND ls_line TO it_list_commentary.
+
+* Hora
+  CLEAR ls_line.
+  ls_line-typ = 'S'.
+  ls_line-key = 'Hora: '.
+  ls_line-info = sy-datum.
+  APPEND ls_line TO it_list_commentary.
+
+* Quantidade de Registros
+  DESCRIBE TABLE t_saida LINES vl_qtd_reg.
+  CLEAR ls_line.
+  ls_line-typ = 'S'.
+  ls_line-key = 'Total de Registros: '.
+  ls_line-info = vl_qtd_reg.
+  APPEND ls_line TO it_list_commentary.
+
+ENDFORM.                    " zf_monta_cabecalho
+* <<< RN 03/03/2008

@@ -1,0 +1,432 @@
+*-----------------------------------------------------------------------
+* Autor...: Thiago Cintra Machado
+*-----------------------------------------------------------------------
+REPORT Z_CURSO_ALV_FUNCAO_MODELO.
+
+
+*-----------------------------------------------------------------------
+* Type-pools
+*-----------------------------------------------------------------------
+TYPE-POOLS: SLIS.
+
+*-----------------------------------------------------------------------
+* Tabelas Transparentes
+*-----------------------------------------------------------------------
+TABLES: VBAK,
+        VBAP,
+        MAKT.
+
+*-----------------------------------------------------------------------
+* Tabelas Internas
+*-----------------------------------------------------------------------
+DATA: BEGIN OF T_VBAK OCCURS 0,
+       VBELN  LIKE VBAK-VBELN,
+       ERDAT  LIKE VBAK-ERDAT,
+       VKORG  LIKE VBAK-VKORG,
+       VTWEG  LIKE VBAK-VTWEG,
+       SPART  LIKE VBAK-SPART,
+       NETWR  LIKE VBAK-NETWR,
+      END OF T_VBAK.
+*
+DATA: BEGIN OF T_VBAP OCCURS 0,
+       VBELN  LIKE VBAP-VBELN,
+       POSNR  LIKE VBAP-POSNR,
+       MATNR  LIKE VBAP-MATNR,
+      END OF T_VBAP.
+*
+DATA: BEGIN OF T_MAKT OCCURS 0,
+        MATNR  LIKE MAKT-MATNR,
+        MAKTX  LIKE MAKT-MAKTX,
+     END OF T_MAKT.
+*
+DATA: BEGIN OF T_SAIDA OCCURS 0,
+       SEL(01) TYPE C,
+       VBELN  LIKE VBAK-VBELN,
+       POSNR  LIKE VBAP-POSNR,
+       MAKTX  LIKE MAKT-MAKTX,
+       ERDAT  LIKE VBAK-ERDAT,
+       VKORG  LIKE VBAK-VKORG,
+       VTWEG  LIKE VBAK-VTWEG,
+       SPART  LIKE VBAK-SPART,
+       NETWR  LIKE VBAK-NETWR,
+       ID(01) TYPE C,
+       LINECOLOR(04) TYPE C,
+      END OF T_SAIDA.
+
+*-----------------------------------------------------------------------
+* Estruturas para o ALV
+*-----------------------------------------------------------------------
+DATA:
+* Fieldcat
+      IT_FIELD TYPE LVC_T_FCAT,
+      IT_FIELD1 TYPE LVC_T_FCAT WITH HEADER LINE,
+* Layout
+      REF_LAYOUT    TYPE LVC_S_LAYO,
+* Objeto container
+      REF_CONTAINER TYPE REF TO CL_GUI_DOCKING_CONTAINER,
+* Objeto grid
+      REF_ALV       TYPE REF TO CL_GUI_ALV_GRID,
+
+      INDROW TYPE LVC_T_ROW,
+
+E_ROW	TYPE	LVC_S_ROW,
+E_COLUMN	TYPE	LVC_S_COL.
+*-----------------------------------------------------------------------
+* Variáveis
+*-----------------------------------------------------------------------
+DATA: V_CONT  LIKE SY-INDEX,
+      V_PROG  LIKE SY-REPID,
+      V_TABIX LIKE SY-TABIX.
+
+*-----------------------------------------------------------------------
+* Classe
+*-----------------------------------------------------------------------
+
+CLASS LCL_EVENT_HANDLER DEFINITION.
+
+  PUBLIC SECTION.
+
+    CLASS-METHODS:
+      ON_DOUBLE_CLICK FOR EVENT DOUBLE_CLICK OF CL_GUI_ALV_GRID
+                      IMPORTING E_ROW E_COLUMN.
+
+*---------------------------------------------------------------------*
+*       CLASS lcl_event_handler IMPLEMENTATION
+*---------------------------------------------------------------------*
+
+
+* Método de  execução para Duplo-click
+  METHOD on_double_click.
+    BREAK-POINT.
+    CASE e_column-fieldname.
+      WHEN 'VBELN'.
+        w_inde1 = e_row-index.
+        PERFORM nfnum_1.
+      WHEN 'BELNR'.
+        PERFORM belnr_1.
+    ENDCASE.
+*   CLEAR wa_saida.
+  ENDMETHOD.
+
+*-----------------------------------------------------------------------
+* Select-options e Parameters
+*-----------------------------------------------------------------------
+    SELECTION-SCREEN BEGIN OF BLOCK B1 WITH FRAME TITLE TEXT-001.
+    SELECTION-SCREEN SKIP.
+    SELECT-OPTIONS: S_VBELN FOR VBAK-VBELN,
+                    S_POSNR FOR VBAP-POSNR.
+    SELECTION-SCREEN ULINE.
+    PARAMETERS: P_CONS AS CHECKBOX.
+    SELECTION-SCREEN SKIP.
+    SELECTION-SCREEN END OF BLOCK B1.
+
+*-----------------------------------------------------------------------
+* Lógica Principal do Programa
+*-----------------------------------------------------------------------
+START-OF-SELECTION.
+
+  PERFORM F_SELECIONA_DADOS.
+
+* Alimentando o Fieldcat
+  V_CONT = V_CONT + 1.
+  PERFORM F_ALIMENTA_FIELDCAT USING:
+
+  'VBAK' 'VBELN'  'Ordem' 'X' ' ' V_CONT,
+  'VBAP' 'POSNR'  'Item' 'X' ' ' V_CONT,
+  'VBAK' 'AUART'  'Tipo'  ' '  ' ' V_CONT,
+  'VBAP' 'MATNR'  'Material'  ' '  ' '  V_CONT,
+  'MAKT' 'MAKTX'  'Descrição'  ' '  ' '  V_CONT,
+  'VBAK' 'ERDAT'  'Data'  ' '  ' '  V_CONT,
+  'VBAK' 'VKORG'  'Organização de Vendas'  ' '  ' '  V_CONT,
+  'VBAK' 'VTWEG'  'Canal de distribuição'  ' '  ' '  V_CONT,
+  'VBAK' 'SPART'  'Setor de atividade'  ' '  ' '  V_CONT,
+  'VBAK' 'NETWR'  'Valor líquido'  ' '  ' '  V_CONT,
+  'ICON' 'ID'  'Status' ' ' ' ' V_CONT.
+
+* Alimentando as características do layout do ALV
+  PERFORM F_MODIFICA_LAYOUT.
+
+* Criando a tela
+  PERFORM F_CRIA_TELA.
+
+END-OF-SELECTION.
+
+*-----------------------------------------------------------------------
+*       Form  f_seleciona_dados
+*-----------------------------------------------------------------------
+*
+*-----------------------------------------------------------------------
+FORM F_SELECIONA_DADOS.
+
+ SELECT VBELN ERDAT VKORG VTWEG SPART NETWR FROM VBAK INTO TABLE T_VBAK
+                                                 WHERE VBELN IN S_VBELN
+                                                       AND AUART = 'SO'.
+  IF NOT T_VBAK[] IS INITIAL.
+    SELECT VBELN POSNR MATNR INTO TABLE T_VBAP FROM VBAP
+                             FOR ALL ENTRIES IN T_VBAK
+                             WHERE VBELN = T_VBAK-VBELN
+                               AND POSNR IN S_POSNR.
+
+    IF NOT T_VBAP[] IS INITIAL.
+      SELECT MATNR MAKTX FROM MAKT INTO TABLE T_MAKT
+                         FOR ALL ENTRIES IN T_VBAP
+                         WHERE MATNR = T_VBAP-MATNR.
+
+      PERFORM PREPARA_SAIDA.
+
+    ENDIF.
+  ENDIF.
+ENDFORM.                    " f_seleciona_dados
+*-----------------------------------------------------------------------
+*       Form  prepara_saida
+*-----------------------------------------------------------------------
+*
+*-----------------------------------------------------------------------
+FORM PREPARA_SAIDA.
+
+  SORT: T_VBAK BY VBELN,
+        T_VBAP BY VBELN POSNR,
+        T_MAKT BY MATNR.
+
+  DESCRIBE TABLE T_VBAP.
+  DO SY-TFILL TIMES.
+    READ TABLE T_VBAP INDEX SY-INDEX.
+    READ TABLE T_VBAK WITH KEY VBELN = T_VBAP-VBELN BINARY SEARCH.
+    READ TABLE T_MAKT WITH KEY MATNR = T_VBAP-MATNR BINARY SEARCH.
+    IF SY-SUBRC <> 0.
+      CLEAR: T_MAKT.
+    ENDIF.
+
+    T_SAIDA-VBELN  = T_VBAK-VBELN.
+    T_SAIDA-POSNR  = T_VBAP-POSNR.
+    T_SAIDA-MAKTX  = T_MAKT-MAKTX.
+    T_SAIDA-ERDAT  = T_VBAK-ERDAT.
+    T_SAIDA-VKORG  = T_VBAK-VKORG.
+    T_SAIDA-VTWEG  = T_VBAK-VTWEG.
+    T_SAIDA-SPART  = T_VBAK-SPART.
+    T_SAIDA-NETWR  = T_VBAK-NETWR.
+    T_SAIDA-ID  = '3'.
+    APPEND T_SAIDA.
+    CLEAR T_SAIDA.
+
+  ENDDO.
+
+ENDFORM.                    " prepara_saida
+*&---------------------------------------------------------------------*
+*&      Form  f_alimenta_fieldcat
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM F_ALIMENTA_FIELDCAT USING  TABNAME FIELDNAME COLTEXT
+                         PKEY DO_SUM COL_POS.
+
+
+  IT_FIELD1-TABNAME = TABNAME.
+  IT_FIELD1-FIELDNAME = FIELDNAME.
+  IT_FIELD1-COLTEXT = COLTEXT.
+  IT_FIELD1-KEY = PKEY.
+  IT_FIELD1-DO_SUM = DO_SUM.
+  IT_FIELD1-COL_POS = COL_POS.
+* it_field1-outputlen = '27'.
+  IF FIELDNAME = 'ID'.
+*   it_field1-icon = 'X'.
+  ENDIF.
+  IF FIELDNAME = 'NETWR' OR FIELDNAME = 'VBELN'.
+    IT_FIELD1-EMPHASIZE = 'C500'.
+    IF FIELDNAME = 'NETWR'.
+      IT_FIELD1-DATATYPE = 'QUAN'.
+    ENDIF.
+  ELSE.
+    IT_FIELD1-EMPHASIZE = '    '.
+
+  ENDIF.
+
+  IF FIELDNAME = 'FLAG'.
+*     it_field1-ref_table = 'IT_SAIDA'.
+    IT_FIELD1-CHECKBOX = 'X'.
+    IT_FIELD1-EDIT = 'X'.
+*  ELSEIF fieldname = 'AUART'.
+*    it_field1-checkbox = ' '.
+*    it_field1-edit = 'X'.
+  ELSE.
+*     it_field1-ref_table = ' '.
+    IT_FIELD1-CHECKBOX = ' '.
+    IT_FIELD1-EDIT = ' '.
+  ENDIF.
+
+  IF FIELDNAME = 'MATNR'.
+    IT_FIELD1-OUTPUTLEN = '18'.
+    IT_FIELD1-EDIT = 'X'.
+*   it_field1-checkbox = 'X'.
+  ENDIF.
+
+  APPEND IT_FIELD1 TO IT_FIELD.
+  V_CONT = V_CONT + 1.
+
+ENDFORM.                    " f_alimenta_fieldcat
+*-----------------------------------------------------------------------
+*       Form  f_modifica_layout
+*-----------------------------------------------------------------------
+*
+*-----------------------------------------------------------------------
+FORM F_MODIFICA_LAYOUT.
+
+  REF_LAYOUT-ZEBRA = 'X'.
+*  ref_layout-numc_total = 'X'.
+  REF_LAYOUT-SEL_MODE = 'D'.
+  REF_LAYOUT-EXCP_FNAME = 'ID'.
+*  REF_LAYOUT-EXCP_LED = 'X'.
+*  ref_layout-no_hgridln = 'X'.
+*  ref_layout-no_vgridln = 'X'.
+*  ref_layout-sgl_clk_hd = 'X'.
+*  ref_layout-no_merging = 'X'.
+*  ref_layout-totals_bef = 'X'.
+  REF_LAYOUT-INFO_FNAME = 'LINECOLOR'.
+  REF_LAYOUT-SMALLTITLE = 'X'.
+  REF_LAYOUT-GRID_TITLE = 'Título da bagaça'.
+
+ENDFORM.                    " modifica_layout
+*&---------------------------------------------------------------------*
+*&      Form  F_CRIA_TELA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM F_CRIA_TELA.
+
+  CALL SCREEN 0100.
+
+ENDFORM.                    " F_CRIA_TELA
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_0100  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE STATUS_0100 OUTPUT.
+
+  SET PF-STATUS '00000100'.
+  SET TITLEBAR '100'.
+
+ENDMODULE.                 " STATUS_0100  OUTPUT
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_0100  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE USER_COMMAND_0100 INPUT.
+
+  CASE SY-UCOMM.
+
+    WHEN 'BACK'.
+      SET SCREEN 0.
+      LEAVE SCREEN.
+      CALL SELECTION-SCREEN '1000'.
+    WHEN 'CANC'.
+      LEAVE PROGRAM.
+    WHEN 'LEAV'.
+      LEAVE PROGRAM.
+    WHEN 'EXEC'.
+      CALL METHOD REF_ALV->GET_SELECTED_ROWS
+                             IMPORTING
+                               ET_INDEX_ROWS = INDROW
+    WHEN OTHERS.
+
+  ENDCASE.
+
+ENDMODULE.                 " USER_COMMAND_0100  INPUT
+*&---------------------------------------------------------------------*
+*&      Module  ALV_EXEC  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE ALV_EXEC OUTPUT.
+
+  DATA: VL_REPID LIKE SY-REPID.
+
+  VL_REPID = SY-REPID.
+
+  CREATE OBJECT REF_CONTAINER
+  EXPORTING
+*    PARENT                      =
+      REPID                       = VL_REPID
+      DYNNR                       = '0100'
+*    SIDE                        = DOCK_AT_LEFT
+      EXTENSION                   = 1070
+*    STYLE                       =
+*    LIFETIME                    = lifetime_default
+*    CAPTION                     =
+*    METRIC                      = 0
+*    RATIO                       =
+*    NO_AUTODEF_PROGID_DYNNR     =
+*    NAME                        =
+*  EXCEPTIONS
+*    CNTL_ERROR                  = 1
+*    CNTL_SYSTEM_ERROR           = 2
+*    CREATE_ERROR                = 3
+*    LIFETIME_ERROR              = 4
+*    LIFETIME_DYNPRO_DYNPRO_LINK = 5
+*    others                      = 6
+      .
+  IF SY-SUBRC <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*            WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+  CREATE OBJECT REF_ALV
+    EXPORTING
+*    I_SHELLSTYLE      = 0
+*    I_LIFETIME        =
+      I_PARENT          = REF_CONTAINER
+*    I_APPL_EVENTS     = space
+*    I_PARENTDBG       =
+*    I_APPLOGPARENT    =
+*    I_GRAPHICSPARENT  =
+*    I_USE_VARIANT_CLASS = SPACE
+*    I_NAME            =
+*  EXCEPTIONS
+*    ERROR_CNTL_CREATE = 1
+*    ERROR_CNTL_INIT   = 2
+*    ERROR_CNTL_LINK   = 3
+*    ERROR_DP_CREATE   = 4
+*    others            = 5
+      .
+  IF SY-SUBRC <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*            WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+  CALL METHOD REF_ALV->SET_TABLE_FOR_FIRST_DISPLAY
+    EXPORTING
+*    I_BYPASSING_BUFFER            =
+*    I_BUFFER_ACTIVE               =
+*    I_CONSISTENCY_CHECK           =
+*    I_STRUCTURE_NAME              =
+*    IS_VARIANT                    =
+*    I_SAVE                        =
+*    I_DEFAULT                     = 'X'
+      IS_LAYOUT                     = REF_LAYOUT
+*    IS_PRINT                      =
+*    IT_SPECIAL_GROUPS             =
+*    IT_TOOLBAR_EXCLUDING          =
+*    IT_HYPERLINK                  =
+*    IT_ALV_GRAPHICS               =
+    CHANGING
+      IT_OUTTAB                     = T_SAIDA[]
+      IT_FIELDCATALOG               = IT_FIELD[]
+*    IT_SORT                       =
+*    IT_FILTER                     =
+*  EXCEPTIONS
+*    INVALID_PARAMETER_COMBINATION = 1
+*    PROGRAM_ERROR                 = 2
+*    TOO_MANY_LINES                = 3
+*    others                        = 4
+          .
+  IF SY-SUBRC <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*            WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+
+ENDMODULE.                 " ALV_EXEC  OUTPUT

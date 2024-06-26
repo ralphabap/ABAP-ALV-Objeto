@@ -1,0 +1,1716 @@
+************************************************************************
+*                                >                                     *
+*                            ACCENTURE                                 *
+************************************************************************
+
+*********************************************
+* Programa  : ZSAD_SDR_RECUPERACAO                                     *
+* Descrição : Painel onde serão apresentadas ordens de venda cortadas  *
+*             e que estão aptas a serem recuperadas                    *
+************************************************************************
+* Autor     : Carlos Watari                                            *
+* Data      : 24/08/2006                                               *
+************************************************************************
+* Alteração : 0001                                                     *
+* Autor     : Alexandre Lima                                           *
+* Data      : 05.09.2006                                               *
+* Descrição :                                                          *
+************************************************************************
+REPORT  zsad_sdr_recuperacao
+        MESSAGE-ID zsadup.
+
+***********************************************************************
+* FIELD-SYMBOLS
+***********************************************************************
+FIELD-SYMBOLS: <ajuste> TYPE ANY,
+               <ajust_modif> TYPE table.
+
+INCLUDE <icon>.
+
+***********************************************************************
+* TYPES
+***********************************************************************
+TYPES: BEGIN OF ty_alv,
+    vbeln       LIKE vbap-vbeln,           "Ordem
+    posnr       LIKE vbap-posnr,           "item
+    vstel       LIKE vbap-vstel,           "Local de expedição
+    vtweg       LIKE vbak-vtweg,           "Canal distribuição
+    kdgrp       LIKE vbkd-kdgrp,           "Grupo de cliente
+    konda       LIKE vbkd-konda,           "Grupo de preços
+    kunnr       LIKE vbak-kunnr,           "Cliente
+    name1       LIKE kna1-name1,           "Nome do cliente
+    dtapu       LIKE zsad_sd_log_ic-dtapu,  "Dt do corte
+    matnr       LIKE vbap-matnr,            "Cod.material
+    sigla       LIKE zdemanda-zsigla,       "Sigla do material
+    marca       LIKE zdemanda-zmarca,       "Marca do materal
+    kwmeng      LIKE vbap-kwmeng ,          "qtde da ordem
+    qtdcx       LIKE zsad_sd_log_ic-qtdcx,  "Qtde cortada
+    qtdkg       LIKE vbap-netpr,            "Valor do corte
+    nrdias      LIKE ztsd_recuperacao-nrdias, "Nr. de dias de estoque
+*--------------------- grade de entrega
+    seg         TYPE c,
+    ter         TYPE c,
+    qua         TYPE c,
+    qui         TYPE c,
+    sex         TYPE c,
+    sab         TYPE c,
+    dom         TYPE c,
+*----------------------
+   vkbur LIKE vbak-vkbur,       "Escritório de vendas
+   vkgrp LIKE vbak-vkgrp,       "Grupo de vendedores
+   vend  LIKE vbpa-kunnr,       "cod.Vendedor
+   anali LIKE ztsd_recuperacao-ernam,   "analista
+   datum LIKE sy-datum,         "Data execução do painel
+*Inicio 0001
+   mcorte(8) TYPE c,
+*Fim 0001
+END OF ty_alv.
+
+TYPES: BEGIN OF ty_vbakp,
+    vbeln       LIKE vbap-vbeln,         "Ordem
+    posnr       LIKE vbap-posnr,         "item
+    abgru       LIKE vbap-abgru,
+    "Motivo de recusa p/cotações e ordens
+    vstel       LIKE vbap-vstel,         "Local de expedição
+    matnr       LIKE vbap-matnr,         "Cod.material
+    werks       LIKE vbap-werks,         "CENTRO
+    kwmeng      LIKE vbap-kwmeng ,       "qtde da ordem
+    netpr       LIKE vbap-netpr,         "Valor do corte
+    ntgew       LIKE vbap-ntgew,
+    vtweg       LIKE vbak-vtweg,         "Canal distribuição
+    kunnr       LIKE vbak-kunnr,         "Cliente
+    vkbur       LIKE vbak-vkbur,         "Escritório de vendas
+    vkgrp       LIKE vbak-vkgrp,         "Grupo de vendedores
+    auart       LIKE vbak-auart,
+END OF ty_vbakp.
+
+***********************************************************************
+* TABELAS
+***********************************************************************
+TABLES: vbap, vbak, vbkd, kna1,  ztsd_recuperacao, zsad_sd_log_ic,
+        ztsd_consenso, ztsd_analista, ztsd_estoque_min.
+
+
+* DADOS do tabela de recuperacao
+DATA: BEGIN OF i_recuperacao OCCURS 0.
+        INCLUDE STRUCTURE ztsd_recuperacao.
+DATA: END OF i_recuperacao.
+* utilizado na eliminacao do histórico de recuperacao
+DATA: BEGIN OF i_rec_gravado OCCURS 0.
+        INCLUDE STRUCTURE ztsd_recuperacao.
+DATA: END OF i_rec_gravado.
+* tabela de estoque minimo
+DATA: BEGIN OF i_estoque_min OCCURS 0.
+        INCLUDE STRUCTURE ztsd_estoque_min.
+DATA: END OF i_estoque_min.
+* tabela de analista
+DATA: BEGIN OF i_analista OCCURS 0.
+        INCLUDE STRUCTURE ztsd_analista.
+DATA: END OF i_analista.
+* Resultados das apurações dos motivos de corte
+DATA: BEGIN OF i_log_ic OCCURS 0.
+        INCLUDE STRUCTURE zsad_sd_log_ic.
+DATA: END OF i_log_ic.
+* utilizado para somar as qtdes por ordem/item
+DATA: BEGIN OF i_log_ic_acum OCCURS 0,
+      vbeln LIKE zsad_sd_log_ic-vbeln,
+      posnr LIKE zsad_sd_log_ic-posnr,
+      dtapu LIKE zsad_sd_log_ic-dtapu,
+      qtdcx LIKE zsad_sd_log_ic-qtdcx,
+      qtdkg LIKE zsad_sd_log_ic-qtdkg,
+      END OF i_log_ic_acum.
+
+
+* TABELA COM OS DADOS ENVIADOS PARA O ALV
+DATA: i_vbakp TYPE TABLE  OF ty_vbakp WITH HEADER LINE.
+DATA: i_vbakp_aux TYPE TABLE  OF ty_vbakp WITH HEADER LINE.
+
+
+DATA: i_alv TYPE TABLE OF ty_alv WITH HEADER LINE.
+DATA: wi_ajuste  LIKE LINE OF i_alv.
+DATA: i_modifica TYPE TABLE OF ty_alv WITH HEADER LINE.
+DATA: i_inicial  TYPE TABLE OF ty_alv WITH HEADER LINE.
+DATA: i_elimina  TYPE TABLE OF ty_alv WITH HEADER LINE.
+
+DATA: BEGIN OF i_modifica_aux OCCURS 0.
+        INCLUDE STRUCTURE zsad_mm_followup.
+DATA: END OF i_modifica_aux.
+
+DATA:    BEGIN OF i_dias OCCURS 0,
+          kunnr LIKE knva-kunnr,
+          mobi2 LIKE knva-moab1,
+          dibi2 LIKE knva-diab1,
+          mibi2 LIKE knva-miab1,
+          dobi2 LIKE knva-doab1,
+          frbi2 LIKE knva-frab1,
+          sabi2 LIKE knva-saab1,
+          sobi2 LIKE knva-soab1,
+        END OF i_dias.
+
+DATA: BEGIN OF i_vbkd OCCURS 0,
+      vbeln LIKE vbkd-vbeln,
+      posnr LIKE vbkd-posnr,
+      kdgrp LIKE vbkd-kdgrp,
+      konda LIKE vbkd-konda,
+      END OF i_vbkd.
+
+DATA: BEGIN OF i_mchb OCCURS 0,
+      matnr LIKE mchb-matnr,
+      werks LIKE mchb-werks,
+      lgort LIKE mchb-lgort,
+      charg LIKE mchb-charg,
+      clabs LIKE mchb-clabs,
+      lvorm LIKE mchb-lvorm,
+      END OF i_mchb.
+
+DATA: BEGIN OF i_mara OCCURS 0,
+      matnr LIKE mara-matnr,
+      mhdhb LIKE mara-mhdhb,
+      tempb LIKE mara-tempb,
+      END OF i_mara.
+
+DATA: BEGIN OF i_log_erro OCCURS 0,
+      vbeln LIKE vbap-vbeln,
+      posnr LIKE vbap-posnr,
+      matnr LIKE vbap-matnr,
+      werks LIKE vbap-werks,
+      vstel LIKE vbap-vstel,
+      obs(60) TYPE c,
+      END OF i_log_erro.
+*Inicio 0001
+DATA: BEGIN OF i_mot_corte OCCURS 0,
+       vbeln LIKE vbap-vbeln, "Documento de vendas
+       posnr LIKE vbap-posnr, "Item do documento de venda
+       abgru LIKE zsad_sd_log_ic-abgru, "Motivo de recusa
+       qtdcx LIKE zsad_sd_log_ic-qtdcx, "Quantidade do corte em Caixas
+       qtdkg LIKE zsad_sd_log_ic-qtdkg, "Quantidade do corte em Kilos
+       matnr LIKE vbap-matnr, "Nº do material
+      END OF i_mot_corte.
+*Fim 0001
+* VARIANTE
+DATA: variante        LIKE disvariant, " Anzeigevariante
+      def_variante    LIKE disvariant, " Defaultvariante
+      variant_exit(1) TYPE c,
+      variant_save(1) TYPE c.
+
+DATA: e_disvariant TYPE disvariant.
+
+DATA: repid    LIKE sy-repid.
+
+*--- INFORMAÇÕES PARA O ALV--------------------------------------------
+
+* MONTA CAMPOS
+
+DATA: t_fieldcat TYPE TABLE OF lvc_s_fcat,
+      e_fieldcat TYPE TABLE OF lvc_s_fcat WITH HEADER LINE. "#EC *
+
+* Estrutura ALV - OBJECT
+
+CLASS lcl_event_handler DEFINITION DEFERRED.
+CLASS lcl_event_receiver DEFINITION DEFERRED.
+
+DATA: it_sort          TYPE TABLE OF lvc_s_sort WITH HEADER LINE,"#EC *
+      it_sort1         TYPE TABLE OF lvc_s_sort,            "#EC *
+      ref_alv            TYPE REF TO cl_gui_alv_grid,       "#EC *
+      ref_alv1           TYPE REF TO cl_gui_alv_grid,       "#EC *
+      ref_picture        TYPE REF TO cl_gui_picture,        "#EC *
+      ref_container      TYPE REF TO cl_gui_custom_container,"#EC *
+      ref_container_aux  TYPE REF TO cl_gui_docking_container,"#EC *
+      ref_container_aux1 TYPE REF TO cl_gui_docking_container,"#EC *
+      ref_layout         TYPE lvc_s_layo,                   "#EC *
+      v_exclu            TYPE ui_functions,                 "#EC *
+      v_exclu1           LIKE v_exclu WITH HEADER LINE,     "#EC *
+      w_inde1            LIKE sy-index,                     "#EC *
+      w_tabix            LIKE sy-tabix,                     "#EC *
+      indrow             TYPE lvc_t_row,                    "#EC *
+      cell               TYPE lvc_t_moce,                   "#EC *
+      indrow1            LIKE indrow WITH HEADER LINE,      "#EC *
+      t_changed          TYPE REF TO cl_alv_changed_data_protocol,"#EC *
+      mod_rows           TYPE REF TO data.                  "#EC *
+*      O_EVENT_RECEIVER   TYPE REF TO LCL_EVENT_RECEIVER.    "#EC *
+
+DATA: ref_container1     TYPE REF TO cl_gui_docking_container,
+      lcl_grid1          TYPE REF TO cl_gui_alv_grid.
+
+* OBJETOS - CONTAINER
+
+*** Objetos para container.
+DATA: text_dcm       TYPE REF TO cl_gui_textedit,
+      text_icm       TYPE REF TO cl_gui_textedit,
+      text_idoc      TYPE REF TO cl_gui_textedit,
+      text_cbl       TYPE REF TO cl_gui_textedit,
+      text_chc       TYPE REF TO cl_gui_textedit,
+      text_rmk       TYPE REF TO cl_gui_textedit,
+      text_nbl       TYPE REF TO cl_gui_textedit,
+      text_container TYPE REF TO cl_gui_textedit,
+      text_dcmi      TYPE REF TO cl_gui_textedit,
+      container      TYPE REF TO cl_gui_custom_container.
+
+DATA:  event_receiver TYPE REF TO lcl_event_receiver.
+
+DATA: e_exclu TYPE ui_functions,
+      i_exclu LIKE e_exclu WITH HEADER LINE.
+
+
+
+***********************************************************************
+* CONSTANTES
+***********************************************************************
+CONSTANTS: c_confirm(4) TYPE c VALUE 'Z001',
+           c_l(01) TYPE c VALUE 'L',
+           c_x(1) TYPE c VALUE 'X',
+           c_a(1) TYPE c VALUE 'A',
+           c_h(1) TYPE c VALUE 'H',
+           c_s(1) TYPE c VALUE 'S',
+           c_barra(1) TYPE c VALUE '/',
+           c_pontos(1) TYPE c VALUE ':'.
+
+***********************************************************************
+* VARIÁVEIS
+***********************************************************************
+DATA: vg_save TYPE c,
+      variant  TYPE disvariant,
+      vg_row_no     TYPE lvc_s_roid,
+      vg_cont TYPE i,
+      vg_dt_inicio LIKE eket-eindt,
+      vg_erro      TYPE c.
+
+DATA: v_teste1(50) TYPE c.
+DATA: v_perc(6)  TYPE c,
+      v_achou    TYPE c,
+      v_ok(1)    TYPE c,
+      ok_code LIKE sy-ucomm,
+*Inicio 0001
+      sy_tabix_alv LIKE sy-tabix.
+*fim 0001
+
+
+*********************************************************************
+* C L A S S E S
+*********************************************************************
+CLASS lcl_event_handler DEFINITION.
+
+  PUBLIC SECTION.
+
+    CLASS-METHODS:
+       on_data_changed FOR EVENT data_changed
+        OF cl_gui_alv_grid IMPORTING er_data_changed.
+
+ENDCLASS.                    "lcl_event_receiver DEFINITION
+
+*---------------------------------------------------------------------*
+*       CLASS lcl_event_receiver DEFINITION
+*---------------------------------------------------------------------*
+*
+*---------------------------------------------------------------------*
+CLASS lcl_event_receiver DEFINITION.
+
+  PUBLIC SECTION.
+
+    METHODS:
+    handle_toolbar
+        FOR EVENT toolbar OF cl_gui_alv_grid
+            IMPORTING e_object e_interactive,
+
+    handle_user_command
+        FOR EVENT user_command OF cl_gui_alv_grid
+            IMPORTING e_ucomm,
+*Inicio 0001
+    handle_user_command_hotspot
+        FOR EVENT hotspot_click OF cl_gui_alv_grid
+            IMPORTING e_row_id e_column_id es_row_no.
+*Fim 0001
+  PRIVATE SECTION.
+
+ENDCLASS.                    "lcl_event_receiver DEFINITION
+
+*---------------------------------------------------------------------*
+*       CLASS IMPLEMENTATION
+*---------------------------------------------------------------------*
+CLASS lcl_event_handler IMPLEMENTATION.
+
+  METHOD on_data_changed.
+    v_teste1 = 'ER_DATA_CHANGED->MP_MOD_ROWS'.
+
+    ASSIGN (v_teste1) TO <ajuste>.
+
+    ASSIGN <ajuste>->* TO <ajust_modif>.
+
+    CLEAR: i_modifica, i_modifica[].
+
+*---Guarda em tabela a linha da tabela interna que foi alterada no ALV
+    LOOP AT <ajust_modif> INTO wi_ajuste.
+      APPEND wi_ajuste TO i_modifica.
+    ENDLOOP.
+
+  ENDMETHOD.                    "on_data_changed
+
+ENDCLASS.                    "lcl_event_handler IMPLEMENTATION
+
+
+*---------------------------------------------------------------------*
+*       CLASS lcl_event_receiver IMPLEMENTATION
+*---------------------------------------------------------------------*
+*
+*---------------------------------------------------------------------*
+CLASS lcl_event_receiver IMPLEMENTATION.
+
+  METHOD handle_toolbar.
+    DATA: ls_toolbar  TYPE stb_button.
+* inclui separator to normal toolbar
+    CLEAR ls_toolbar.
+    MOVE 3 TO ls_toolbar-butn_type.
+    APPEND ls_toolbar TO e_object->mt_toolbar.
+* inclui botão  grava histórico de recuperação
+    CLEAR ls_toolbar.
+    MOVE 'GRAVAR' TO ls_toolbar-function.
+    MOVE icon_employee TO ls_toolbar-icon.
+    MOVE 'Histórico de Recuperação'(111) TO ls_toolbar-quickinfo.
+    MOVE 'Gravar' TO ls_toolbar-text.
+    MOVE ' ' TO ls_toolbar-disabled.
+    APPEND ls_toolbar TO e_object->mt_toolbar.
+* Inclui botão consulta log
+    CLEAR ls_toolbar.
+    MOVE 'LOG' TO ls_toolbar-function.
+    MOVE icon_biw_report_view TO ls_toolbar-icon.
+    MOVE 'log de ocorrências'(111) TO ls_toolbar-quickinfo.
+    MOVE 'Log' TO ls_toolbar-text.
+    MOVE ' ' TO ls_toolbar-disabled.
+    APPEND ls_toolbar TO e_object->mt_toolbar.
+
+
+  ENDMETHOD.                    "handle_toolbar
+
+  METHOD handle_user_command.
+    DATA: lt_rows TYPE lvc_t_row.
+
+    repid = sy-repid.
+
+    CASE e_ucomm.
+      WHEN 'GRAVAR'.
+* grava histórico de recuperação
+        PERFORM f_grava_historico.
+
+        CALL METHOD lcl_grid1->get_selected_rows
+          IMPORTING
+            et_index_rows = lt_rows.
+        CALL METHOD cl_gui_cfw=>flush.
+        IF sy-subrc NE 0.
+* add your handling, for example
+          CALL FUNCTION 'POPUP_TO_INFORM'
+            EXPORTING
+              titel = repid
+              txt2  = sy-subrc
+              txt1  = 'Error in Flush'(500).
+        ELSE.
+*                  perform show_booking_table tables lt_rows.
+        ENDIF.
+      WHEN 'LOG'.
+        CALL SCREEN 0200. "IMPRIME LOG DE OCORRÊNCIA.
+    ENDCASE.
+  ENDMETHOD.                           "handle_user_command
+
+  METHOD handle_user_command_hotspot.
+
+    sy_tabix_alv = e_row_id.
+    PERFORM f_busca_motivo_corte.
+*e_row_id e_column_id es_row_no
+  ENDMETHOD.                    "handle_user_command_hotspot
+
+ENDCLASS.                    "lcl_event_receiver IMPLEMENTATION
+************************************************************************
+* PARAMETERS AND SELECT-OPTION
+************************************************************************
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+SELECT-OPTIONS: s_abgru FOR vbap-abgru,"  obligatory,   "Motivo de corte
+                s_kdgrp FOR vbkd-kdgrp,              "Grupos de cliente
+                s_konda FOR vbkd-konda,              "Grupos de preços
+                s_vstel FOR vbap-vstel,              "Local de Expedição
+* data apuracao do corte
+                s_dtapu FOR zsad_sd_log_ic-dtapu OBLIGATORY,
+                s_auart FOR vbak-auart.
+" obligatory.   "Tipo doc de venda
+SELECTION-SCREEN END OF BLOCK b1.
+
+* seleção de grade de entrega
+SELECTION-SCREEN: BEGIN OF BLOCK b2 WITH FRAME TITLE text-024.
+SELECTION-SCREEN: END OF BLOCK b2.
+
+* Seleção de cortes
+SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE text-021.
+PARAMETERS: p_corte  TYPE checkbox DEFAULT ''.
+SELECTION-SCREEN END OF BLOCK b3.
+
+
+* seleção de grade de entrega
+SELECTION-SCREEN: BEGIN OF BLOCK b5 WITH FRAME TITLE text-040.
+PARAMETER: p_grade RADIOBUTTON GROUP 4 USER-COMMAND proc DEFAULT 'X',
+           p_gradp RADIOBUTTON GROUP 4.
+
+
+SELECTION-SCREEN BEGIN OF LINE.
+
+SELECTION-SCREEN COMMENT 01(3) text-041.    "SEG
+PARAMETERS: p_seg AS CHECKBOX.
+SELECTION-SCREEN COMMENT 07(3) text-042.    "TER
+PARAMETERS: p_ter AS CHECKBOX.
+SELECTION-SCREEN COMMENT 13(3) text-043.    "QUA
+PARAMETERS: p_qua AS CHECKBOX.
+SELECTION-SCREEN COMMENT 19(3) text-044.    "QUI
+PARAMETERS: p_qui AS CHECKBOX.
+SELECTION-SCREEN COMMENT 25(3) text-045.    "SEX
+PARAMETERS: p_sex AS CHECKBOX.
+SELECTION-SCREEN COMMENT 31(3) text-046.    "SAB
+PARAMETERS: p_sab AS CHECKBOX.
+SELECTION-SCREEN COMMENT 37(3) text-047.    "DOM
+PARAMETERS: p_dom AS CHECKBOX.
+
+SELECTION-SCREEN END OF LINE.
+SELECTION-SCREEN: END OF BLOCK b5.
+
+* Seleção para eliminar dados da tabela historico de recuperacao
+SELECTION-SCREEN: BEGIN OF BLOCK b4 WITH FRAME TITLE text-025.
+SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 01(29) text-026.
+PARAMETERS: p_dias(2) TYPE n DEFAULT '90'.
+SELECTION-SCREEN COMMENT 34(5) text-027.
+SELECTION-SCREEN END OF LINE.
+SELECTION-SCREEN: END OF BLOCK b4.
+
+
+* seleção de variante de exibição alv
+SELECTION-SCREEN: BEGIN OF BLOCK b6 WITH FRAME TITLE text-002.
+PARAMETERS: p_varian(15) TYPE c.
+SELECTION-SCREEN: END OF BLOCK b6.
+
+
+************************************************************************
+*INITIALIZATION.
+************************************************************************
+INITIALIZATION.
+
+  PERFORM f_carrega_variant.
+
+  SET TITLEBAR 'TITULO_1'.
+
+************************************************************************
+* AT SELECTION-SCREEN
+************************************************************************
+AT SELECTION-SCREEN.
+  PERFORM eingaben_pruefen.            "Usado para variante
+  PERFORM f_valida_campos.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_varian.
+  PERFORM f4_for_variant.              "Machcode da variante
+
+************************************************************************
+* START-OF-SELECTION.
+************************************************************************
+START-OF-SELECTION.
+
+  PERFORM f_busca_dados.
+  PERFORM f_monta_dados.
+  PERFORM f_exibe_relatorio.
+
+  PERFORM f_elimina_recuperacao.
+
+END-OF-SELECTION.
+
+TOP-OF-PAGE.
+  PERFORM f_cabecalho.
+
+*&---------------------------------------------------------------------*
+*&      Form  F_BUSCA_DADOS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM f_busca_dados .
+
+
+*BUSCA ORDENS CORTADAS NA TABELA ZSAD_SD_LOG_IC
+
+  SELECT * INTO TABLE i_log_ic
+         FROM zsad_sd_log_ic
+         WHERE dtapu IN s_dtapu AND
+               status = 'C' AND
+               flag_teste = 'A'.
+
+  IF sy-subrc <> 0.
+    MESSAGE e012(zsadup) WITH 'Não há dados para a seleção informada'.
+  ENDIF.
+
+  SORT i_log_ic BY vbeln posnr.
+
+  LOOP AT i_log_ic.
+    MOVE-CORRESPONDING i_log_ic TO i_log_ic_acum.
+    COLLECT i_log_ic_acum.
+  ENDLOOP.
+
+*---- BUSCA DADOS Da ORDEM cabecalho/item
+
+  SELECT p~vbeln p~posnr p~abgru p~vstel p~matnr p~werks
+         p~kwmeng p~netpr p~ntgew
+         k~vtweg k~kunnr k~vkbur k~vkgrp k~auart
+         INTO TABLE i_vbakp
+         FROM vbak AS k
+         INNER JOIN vbap AS p
+               ON k~vbeln = p~vbeln
+         FOR ALL ENTRIES IN i_log_ic_acum
+         WHERE p~vbeln = i_log_ic_acum-vbeln AND
+               p~posnr = i_log_ic_acum-posnr AND
+               p~abgru IN s_abgru AND
+               p~vstel IN s_vstel AND
+               k~auart IN s_auart.
+
+  IF sy-subrc <> 0.
+    MESSAGE e012(zsadup) WITH 'Não há dados para a seleção informada'.
+  ENDIF.
+
+  SORT i_vbakp BY vbeln posnr.
+
+  i_vbakp_aux[] = i_vbakp[].
+  DELETE ADJACENT DUPLICATES FROM i_vbakp_aux COMPARING vbeln.
+
+
+* busca  grupo de clientes e gr de preco das ordens
+  SELECT vbeln posnr kdgrp konda
+         INTO TABLE i_vbkd
+         FROM vbkd
+         FOR ALL ENTRIES IN i_vbakp_aux
+         WHERE vbeln = i_vbakp_aux-vbeln AND
+               posnr = '000000' AND
+               kdgrp IN s_kdgrp AND
+               konda IN s_konda.
+
+  IF sy-subrc <> 0.
+    MESSAGE e012(zsadup) WITH 'Não há dados para a seleção informada'.
+  ENDIF.
+
+  SORT i_vbkd BY vbeln posnr.
+
+*elimina ordem da i_vbakp que não estão na i_vbkd ordens finais
+*selecionadas
+  LOOP AT i_vbakp.
+    READ TABLE i_vbkd WITH KEY vbeln = i_vbakp-vbeln.
+    IF sy-subrc <> 0.
+      DELETE i_vbakp.
+    ENDIF.
+  ENDLOOP.
+
+* busca grade de entrega do clientes
+  CLEAR i_vbakp_aux[].
+  i_vbakp_aux[] = i_vbakp[].
+  SORT i_vbakp_aux BY kunnr.
+  DELETE ADJACENT DUPLICATES FROM i_vbakp_aux COMPARING kunnr.
+
+  SELECT kunnr mobi2  dibi2 mibi2 dobi2 frbi2  sabi2 sobi2
+         FROM knva
+         INTO TABLE i_dias
+    FOR ALL ENTRIES IN i_vbakp_aux
+    WHERE kunnr = i_vbakp_aux-kunnr.
+
+  SORT i_dias BY kunnr.
+* Estoque minimo carrega p/ todos os locais de expedição.
+* Carrega todo tabela pequena
+
+  SELECT * INTO TABLE i_estoque_min
+           FROM ztsd_estoque_min.
+* carrega analista.
+* carrega todo tabela pequena
+  SELECT * INTO TABLE i_analista
+           FROM ztsd_analista.
+
+
+
+  CLEAR i_vbakp_aux[].
+  i_vbakp_aux[] = i_vbakp[].
+  SORT i_vbakp_aux BY matnr.
+  DELETE ADJACENT DUPLICATES FROM i_vbakp_aux COMPARING matnr.
+
+  SELECT matnr mhdhb tempb
+         INTO TABLE i_mara
+         FROM mara
+         FOR ALL ENTRIES IN i_vbakp_aux
+         WHERE matnr = i_vbakp_aux-matnr.
+  SORT i_mara BY matnr.
+  CLEAR: i_vbakp_aux[].
+
+ENDFORM.                    " F_BUSCA_DADOS
+*&---------------------------------------------------------------------*
+*&      Form  F_EXIBE_RELATORIO
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM f_exibe_relatorio .
+
+  PERFORM f_monta_campos.
+
+  PERFORM f_carrega_variant.
+
+  CALL SCREEN 0100. " Gera Relatório ALV
+
+ENDFORM.                    " F_EXIBE_RELATORIO
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_0100  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_0100 OUTPUT.
+  SET PF-STATUS 'STDD'.
+  SET TITLEBAR 'TITULO_1'.
+
+ENDMODULE.                 " STATUS_0100  OUTPUT
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_0100  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_0100 INPUT.
+
+  CASE sy-ucomm.
+    WHEN 'BACK' OR 'LEAV'.
+      LEAVE TO SCREEN 0.
+  ENDCASE.
+
+ENDMODULE.                 " USER_COMMAND_0100  INPUT
+*&---------------------------------------------------------------------*
+*&      Module  ALV  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE alv OUTPUT.
+
+  DATA: vl_repid TYPE sy-repid.
+
+  vl_repid = sy-repid.
+
+*----Monta tabela de Exclução de Toolbar
+  PERFORM f_excl_tollbar USING:
+*                               cl_gui_alv_grid=>mc_fc_print,
+*                               cl_gui_alv_grid=>mc_fc_print_back,
+*                               cl_gui_alv_grid=>mc_fc_print_prev,
+*                               cl_gui_alv_grid=>mc_fc_subtot,
+                               cl_gui_alv_grid=>mc_fc_loc_append_row,
+                               cl_gui_alv_grid=>mc_fc_loc_copy,
+                               cl_gui_alv_grid=>mc_fc_loc_cut,
+                               cl_gui_alv_grid=>mc_fc_loc_paste,
+**                               cl_gui_alv_grid=>mc_fc_refresh,
+                               cl_gui_alv_grid=>mc_fc_loc_insert_row,
+*                               CL_GUI_ALV_GRID=>MC_FC_LOC_DELETE_ROW,
+                               cl_gui_alv_grid=>mc_fc_loc_copy_row,
+                               cl_gui_alv_grid=>mc_fc_check,
+                             cl_gui_alv_grid=>mc_fc_loc_paste_new_row,
+                               cl_gui_alv_grid=>mc_fc_loc_move_row,
+**                               cl_gui_alv_grid=>mc_fc_info,
+*                               cl_gui_alv_grid=>mc_fc_help,
+*                               cl_gui_alv_grid=>mc_fc_loc_undo,
+*                               cl_gui_alv_grid=>mc_fc_graph,
+**                               cl_gui_alv_grid=>mc_fc_sum,
+*                               cl_gui_alv_grid=>mc_fc_average,
+*                               cl_gui_alv_grid=>mc_fc_maximum,
+*                               cl_gui_alv_grid=>mc_fc_minimum,
+*                               cl_gui_alv_grid=>mc_fc_views,
+*                               cl_gui_alv_grid=>mc_fc_view_crystal,
+*                               cl_gui_alv_grid=>mc_fc_view_lotus,
+*                               cl_gui_alv_grid=>mc_fc_html,
+*                               cl_gui_alv_grid=>mc_fc_expmdb,
+*                               cl_gui_alv_grid=>mc_fc_expcrdata,
+*                               cl_gui_alv_grid=>mc_fc_expcrdesig,
+*                               cl_gui_alv_grid=>mc_fc_expcrtempl,
+*                               cl_gui_alv_grid=>mc_fc_call_xint,
+*                               cl_gui_alv_grid=>mc_fc_call_abc,
+*                               cl_gui_alv_grid=>mc_fc_call_crweb,
+*                      cl_gui_alv_grid=>mc_fc_url_copy_to_clipboard,
+*                               cl_gui_alv_grid=>mc_fc_to_office,
+*                               cl_gui_alv_grid=>mc_fc_word_processor,
+*                               cl_gui_alv_grid=>mc_fc_view_excel,
+                               cl_gui_alv_grid=>mc_fc_send.
+
+
+
+  CREATE OBJECT ref_container1
+    EXPORTING
+      repid                       = vl_repid
+   side                        = cl_gui_docking_container=>align_at_top
+      extension                   = 600
+    EXCEPTIONS
+      cntl_error                  = 1
+      cntl_system_error           = 2
+      create_error                = 3
+      lifetime_error              = 4
+      lifetime_dynpro_dynpro_link = 5
+      OTHERS                      = 6
+      .
+  IF sy-subrc <> 0.
+* NÃO É NECESSÁRIO REALIZAR NADA NESSE PONTO.
+  ENDIF.
+
+  CREATE OBJECT lcl_grid1
+    EXPORTING
+      i_parent          = ref_container1.
+
+  IF sy-subrc <> 0.
+* NÃO É NECESSÁRIO REALIZAR NADA NESSE PONTO.
+  ENDIF.
+
+  ref_layout-sel_mode = 'D'.
+  ref_layout-zebra = 'X'.
+
+
+  SET HANDLER:
+                 lcl_event_handler=>on_data_changed FOR lcl_grid1.
+
+  CALL METHOD lcl_grid1->set_table_for_first_display
+    EXPORTING
+      is_layout            = ref_layout
+      is_variant           = e_disvariant
+      i_save               = c_a
+      i_default            = c_x
+      it_toolbar_excluding = e_exclu
+    CHANGING
+      it_outtab            = i_alv[]
+      it_fieldcatalog      = t_fieldcat.
+
+  IF sy-subrc <> 0.
+* NÃO É NECESSÁRIO REALIZAR NADA NESSE PONTO.
+  ENDIF.
+
+  CREATE OBJECT event_receiver.
+  SET HANDLER event_receiver->handle_toolbar FOR lcl_grid1.
+  SET HANDLER event_receiver->handle_user_command FOR lcl_grid1.
+  SET HANDLER event_receiver->handle_user_command_hotspot FOR lcl_grid1.
+  CALL METHOD lcl_grid1->set_toolbar_interactive.
+
+ENDMODULE.                 " ALV  OUTPUT
+
+*&---------------------------------------------------------------------
+*&      Form  f_carrega_variant
+*&---------------------------------------------------------------------
+*       text
+*----------------------------------------------------------------------
+
+FORM f_carrega_variant .
+
+  variant_save           = c_a.
+  e_disvariant-variant   = p_varian.
+  e_disvariant-report    = sy-cprog.
+  e_disvariant-username  = sy-uname.
+  def_variante           = e_disvariant.
+
+ENDFORM.                    " f_carrega_variant
+
+*&---------------------------------------------------------------------
+*&      Form  f4_for_variant
+*&---------------------------------------------------------------------
+*       text
+*----------------------------------------------------------------------
+
+FORM f4_for_variant .
+
+*  DATA: variant_exit(1) TYPE c.
+
+  CALL FUNCTION 'REUSE_ALV_VARIANT_F4'
+    EXPORTING
+      is_variant = e_disvariant
+      i_save     = variant_save
+    IMPORTING
+      e_exit     = variant_exit
+      es_variant = def_variante
+    EXCEPTIONS
+      not_found  = 2.
+  IF sy-subrc    = 2.
+    MESSAGE ID sy-msgid TYPE 'S' NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ELSE.
+    IF variant_exit EQ space.
+      p_varian              = def_variante-variant.
+      e_disvariant-variant = def_variante-variant.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.                    " f4_for_variant
+**---------------------------------------------------------------------*
+*      Form  EINGABEN_PRUEFEN
+*---------------------------------------------------------------------*
+FORM eingaben_pruefen.
+
+  IF NOT p_varian IS INITIAL.
+    MOVE variante TO def_variante.
+    MOVE p_varian TO def_variante-variant.
+    def_variante-report = sy-repid.
+    CALL FUNCTION 'REUSE_ALV_VARIANT_EXISTENCE'
+      EXPORTING
+        i_save     = variant_save
+      CHANGING
+        cs_variant = def_variante.
+    variante = def_variante.
+  ELSE.
+    CLEAR variante.
+    variante-report = repid.
+  ENDIF.
+
+ENDFORM.                               " EINGABEN_PRUEFEN
+*&---------------------------------------------------------------------*
+*&      Form  F_MONTA_CAMPOS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM f_monta_campos .
+
+* Carrega dados para colunas na saída ALV
+  PERFORM f_fill_filedcat USING:
+
+  'I_ALV' 'VBELN' '' '' text-020 c_x ''  vg_cont '' '' '',
+  'I_ALV' 'POSNR' '' '' text-008 c_x ''  vg_cont '' '' '',
+  'I_ALV' 'VSTEL' '' '' text-011 '' ''  vg_cont '' '' '',
+  'I_ALV' 'VTWEG' '' '' text-010 '' ''  vg_cont '' '' '',
+  'I_ALV' 'KDGRP' '' '' text-009 '' ''  vg_cont '' '' '',
+  'I_ALV' 'KONDA' '' '' text-012 '' ''  vg_cont '' 'DATS' '',
+  'I_ALV' 'KUNNR' '' '' text-022 '' '' vg_cont '' '' '',
+  'I_ALV' 'NAME1' '' '' text-023 '' '' vg_cont '' '' '',
+
+  'I_ALV' 'DTAPU'  '' '' text-013 '' ''  vg_cont ''  'DATS' '',
+  'I_ALV' 'MATNR'  '' '' text-014 '' ''  vg_cont ''  '' '',
+  'I_ALV' 'SIGLA'  '' '' text-015 '' ''  vg_cont ''  '' '',
+  'I_ALV' 'MARCA'  '' '' text-016 '' ''  vg_cont ''  '' '',
+  'I_ALV' 'KWMENG' '' '' text-017 '' ''  vg_cont ''  '' '',
+  'I_ALV' 'QTDCX'  '' '' text-018 '' ''  vg_cont ''  '' '',
+  'I_ALV' 'NRDIAS' '' '' text-019 '' ''  vg_cont ''  '' '',
+  'I_ALV' 'SEG' '' '' text-028 '' ''  vg_cont ''  '' '',
+  'I_ALV' 'TER' '' '' text-029 '' ''  vg_cont ''  '' '',
+  'I_ALV' 'QUA' '' '' text-030 '' ''  vg_cont ''  '' '',
+  'I_ALV' 'QUI' '' '' text-031 '' ''  vg_cont ''  '' '',
+  'I_ALV' 'SEX' '' '' text-032 '' ''  vg_cont ''  '' '',
+  'I_ALV' 'SAB' '' '' text-033 '' ''  vg_cont ''  '' '',
+  'I_ALV' 'DOM' '' '' text-034 '' ''  vg_cont ''  '' '',
+  'I_ALV' 'VKBUR' '' '' text-035 '' ''  vg_cont ''  '' '',
+  'I_ALV' 'VKGRP' '' '' text-036 '' ''  vg_cont ''  '' '',
+  'I_ALV' 'VEND' '' ''  text-037 '' ''  vg_cont ''  '' '',
+  'I_ALV' 'ANALI' '' '' text-038 '' ''  vg_cont c_x  '' '',
+  'I_ALV' 'DATUM' '' '' text-039 '' ''  vg_cont ''  'DATS' '',
+*Inicio 0001
+  'I_ALV' 'MCORTE' '' '' text-048 '' ''  vg_cont ''  '' c_x.
+*Fim 0001
+ENDFORM.                    " F_MONTA_CAMPOS
+*&---------------------------------------------------------------------*
+*&      Form  F_FILL_FILEDCAT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM f_fill_filedcat  USING    tabname fieldname
+                               ref_tabname ref_fieldname
+                               coltext pkey do_sum
+                               col_pos edit datatype
+*Inicio 0001
+                               hotspot.
+*Fim 0001
+
+  CLEAR e_fieldcat.
+  vg_cont = vg_cont + 1.
+
+  e_fieldcat-tabname     = tabname.
+  e_fieldcat-fieldname   = fieldname.
+  e_fieldcat-ref_table   = ref_tabname.
+  e_fieldcat-ref_field   = ref_fieldname.
+  e_fieldcat-coltext     = coltext.
+  e_fieldcat-key         = pkey.
+  e_fieldcat-do_sum      = do_sum.
+  e_fieldcat-col_pos     = col_pos.
+  e_fieldcat-edit        = edit.
+  e_fieldcat-datatype    = datatype.
+*Inicio 0001
+  e_fieldcat-hotspot     = hotspot.
+*Fim 0001
+  APPEND e_fieldcat TO t_fieldcat.
+
+ENDFORM.                    " F_FILL_FILEDCAT
+*&---------------------------------------------------------------------*
+*&      Form  F_VALIDA_CAMPOS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM f_valida_campos .
+  DATA: dif TYPE i.
+* consiste dias de exclusão.
+  IF p_dias IS INITIAL.
+    MESSAGE e012(zsadup) WITH 'Dias de exclusão inválido'.
+  ENDIF.
+* valida Data Apuração do corte
+  IF NOT s_dtapu-high IS INITIAL.
+    dif = s_dtapu-high - s_dtapu-low.
+*Inicio 0001
+*    IF dif > 7.
+*      MESSAGE e012(zsadup) WITH 'Dt criação maximo 1 semana' .
+*    ENDIF.
+*Fim 0001
+  ENDIF.
+
+* valida grade
+  IF p_gradp = 'X' AND
+     p_seg IS INITIAL AND
+     p_ter IS INITIAL AND
+     p_qua IS INITIAL AND
+     p_qui IS INITIAL AND
+     p_sex IS INITIAL AND
+     p_sab IS INITIAL AND
+     p_dom IS INITIAL.
+
+    MESSAGE e012(zsadup) WITH 'Selecione pelo menos 1 grade' .
+
+  ENDIF.
+
+ENDFORM.                    " F_VALIDA_CAMPOS
+*&---------------------------------------------------------------------*
+*&      Form  F_GRAVA_ALTERACAO
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM f_grava_historico .
+
+  DATA: v_valorcorte LIKE ztsd_recuperacao-netpr,
+        v_qtdefaturada LIKE ztsd_recuperacao-kwmeng.
+*RECUPERA Todas as ordens da tela selecionada da tabela ztsd_recuperacao
+* para não gravar registros já gravados
+  SELECT * INTO TABLE i_rec_gravado
+         FROM ztsd_recuperacao
+         FOR ALL ENTRIES IN i_alv
+
+         WHERE vbeln = i_alv-vbeln AND
+               posnr = i_alv-posnr.
+
+  SORT i_rec_gravado BY vbeln posnr.
+
+  LOOP AT i_alv.
+
+    READ TABLE i_rec_gravado WITH KEY vbeln = i_alv-vbeln
+                                      posnr = i_alv-posnr
+                                      BINARY SEARCH.
+
+    IF sy-subrc = 0.
+      CONTINUE.
+    ENDIF.
+
+    CLEAR i_vbakp.
+    READ TABLE i_vbakp WITH KEY vbeln = i_alv-vbeln
+                                posnr = i_alv-posnr
+                                BINARY SEARCH.
+    CLEAR i_recuperacao.
+
+    i_recuperacao-vbeln = i_alv-vbeln.
+    i_recuperacao-posnr = i_alv-posnr.
+    i_recuperacao-dtapu = i_alv-dtapu.
+    i_recuperacao-abgru = i_vbakp-abgru.
+    i_recuperacao-erdat = sy-datum.
+    i_recuperacao-matnr = i_alv-matnr.
+    i_recuperacao-qtdcx = i_alv-qtdcx.
+    i_recuperacao-qtdkg = i_alv-qtdkg.
+    i_recuperacao-netpr = v_valorcorte.
+    i_recuperacao-nrdias = i_alv-nrdias.
+    i_recuperacao-ernam = i_alv-anali.
+    i_recuperacao-kwmeng = v_qtdefaturada.
+
+    APPEND i_recuperacao.
+  ENDLOOP.
+
+  IF i_recuperacao[] IS INITIAL.
+    MESSAGE i012(zsadup) WITH
+    'Ordens selecionada já foram gravados anteriormente.' .
+    EXIT.
+  ENDIF.
+
+  MODIFY ztsd_recuperacao FROM TABLE i_recuperacao.
+
+  IF sy-subrc EQ 0.
+    COMMIT WORK.
+    MESSAGE ID 'ZSRM01' TYPE 'S' NUMBER '013'.
+  ELSE.
+    ROLLBACK WORK.
+    MESSAGE ID 'ZSRM01' TYPE 'I' NUMBER '016'.
+  ENDIF.
+
+ENDFORM.                    " F_GRAVA_ALTERACAO
+
+*&---------------------------------------------------------------------*
+*       Monta tabela de funções que devem ser excluídas da Toolbar
+*----------------------------------------------------------------------*
+*      -->P_FUNCAO   Função ALV a ser excluída
+*----------------------------------------------------------------------*
+FORM f_excl_tollbar  USING    p_funcao TYPE ui_func.
+
+  i_exclu = p_funcao.
+  APPEND i_exclu TO e_exclu.
+
+ENDFORM.                    " F_EXCL_TOLLBAR
+
+
+
+*&---------------------------------------------------------------------*
+*&      Form  f_dias_entrega
+*&---------------------------------------------------------------------*
+FORM f_dias_entrega .
+
+  CLEAR i_dias.
+  READ TABLE i_dias
+    WITH KEY kunnr = i_vbakp-kunnr
+    BINARY SEARCH.
+
+  IF sy-subrc = 0.
+    IF i_dias-mobi2 = ' '
+    OR i_dias-mobi2 IS INITIAL.
+      i_alv-seg = ' '.
+    ELSE.
+      i_alv-seg = 'X'.
+    ENDIF.
+    IF i_dias-dibi2 = ' '
+    OR i_dias-dibi2 IS INITIAL.
+      i_alv-ter = ' '.
+    ELSE.
+      i_alv-ter = 'X'.
+    ENDIF.
+    IF i_dias-mibi2 = ' '
+    OR i_dias-mibi2 IS INITIAL.
+      i_alv-qua = ' '.
+    ELSE.
+      i_alv-qua = 'X'.
+    ENDIF.
+    IF i_dias-dobi2 = ' '
+    OR i_dias-dobi2 IS INITIAL.
+      i_alv-qui = ' '.
+    ELSE.
+      i_alv-qui = 'X'.
+    ENDIF.
+    IF i_dias-frbi2 = ' '
+    OR i_dias-frbi2 IS INITIAL.
+      i_alv-sex = ' '.
+    ELSE.
+      i_alv-sex = 'X'.
+    ENDIF.
+    IF i_dias-sabi2 = ' '
+    OR i_dias-sabi2 IS INITIAL.
+      i_alv-sab = ' '.
+    ELSE.
+      i_alv-sab = 'X'.
+    ENDIF.
+    IF i_dias-sobi2 = ' '
+    OR i_dias-sobi2 IS INITIAL.
+      i_alv-dom = ' '.
+    ELSE.
+      i_alv-dom = 'X'.
+    ENDIF.
+  ENDIF.
+* SELEÇÃO DE GRADE DE ENTREGA PARCIAL SE
+* SATISFAZER UMA DAS GRADE OK.
+
+  IF p_gradp = 'X'.
+    IF p_seg = 'X' AND p_seg = i_alv-seg.
+      EXIT.
+    ENDIF.
+    IF p_ter = 'X' AND p_ter = i_alv-ter.
+      EXIT.
+    ENDIF.
+    IF p_qua = 'X' AND p_qua = i_alv-qua.
+      EXIT.
+    ENDIF.
+    IF p_qui = 'X' AND p_qui = i_alv-qui.
+      EXIT.
+    ENDIF.
+    IF p_sex = 'X' AND p_sex = i_alv-sex.
+      EXIT.
+    ENDIF.
+    IF p_sab = 'X' AND p_sab = i_alv-sab.
+      EXIT.
+    ENDIF.
+    IF p_dom = 'X' AND p_dom = i_alv-dom.
+      EXIT.
+    ENDIF.
+    v_ok = 'E'.
+
+  ENDIF.
+
+ENDFORM.                    " f_dias_entrega
+*&---------------------------------------------------------------------*
+*&      Form  f_recupera_sigla_marca
+*&---------------------------------------------------------------------*
+FORM f_recupera_sigla_marca .
+  TABLES: cabn, ausp.
+  DATA:
+    w_sigla LIKE cabn-atinn,
+    w_marca LIKE cabn-atinn,
+    zsigla LIKE ausp-atwrt,
+    zmarca LIKE ausp-atwrt.
+
+
+* Seleção do atinn da característica zsigla
+  SELECT atinn
+      FROM cabn
+      INTO w_sigla
+      UP TO 1 ROWS
+          WHERE atnam = 'ZSIGLA'.
+  ENDSELECT.
+
+  IF sy-subrc = 0.
+    SELECT atwrt
+      FROM ausp
+        INTO zsigla
+        UP TO 1 ROWS
+            WHERE objek = i_vbakp-matnr
+              AND atinn = w_sigla.
+    ENDSELECT.
+  ENDIF.
+
+* Seleção  do atinn da caracteristica zmarca
+  SELECT atinn
+    FROM cabn
+      INTO w_marca
+        UP TO 1 ROWS
+          WHERE atnam = 'ZMARCA'.
+  ENDSELECT.
+  IF sy-subrc = 0.
+
+    SELECT atwrt
+      FROM ausp
+        INTO zmarca
+        UP TO 1 ROWS
+            WHERE objek =  i_vbakp-matnr
+              AND atinn =  w_marca.
+    ENDSELECT.
+  ENDIF.
+
+  i_alv-sigla = zsigla.       "Sigla do material
+  i_alv-marca = zmarca.       "Marca do materal
+
+ENDFORM.                    " f_recupera_sigla_marca
+*&---------------------------------------------------------------------*
+*&      Form  F_RECUPERA_ANALISTA
+*&---------------------------------------------------------------------*
+FORM f_recupera_analista .
+
+  READ TABLE i_analista WITH KEY vstel = i_vbakp-vstel.
+
+  IF sy-subrc = 0.
+    i_alv-anali = i_analista-ernam.
+  ENDIF.
+
+ENDFORM.                    " F_RECUPERA_ANALISTA
+*&---------------------------------------------------------------------*
+*&      Form  F_MONTA_DADOS
+*&---------------------------------------------------------------------*
+FORM f_monta_dados .
+
+  DATA: v_tabix LIKE sy-tabix,
+        v_skfor LIKE knkk-skfor.
+
+*PROGRAMAR
+  DATA: v_name1 LIKE kna1-name1.
+  DATA: v_nrdias(2) TYPE n.
+  DATA: v_valor_corte LIKE vbap-netpr.
+
+
+*MONTA TABELA INTERNA I_ALV para impressão.
+*==========================================
+
+  LOOP AT i_vbkd.
+
+    CLEAR i_vbakp.
+    READ TABLE i_vbakp WITH KEY vbeln = i_vbkd-vbeln
+                                BINARY SEARCH.
+    IF sy-subrc EQ 0.
+      v_tabix = sy-tabix.
+*-----------------------------------------------
+      LOOP AT i_vbakp FROM v_tabix.
+        CLEAR i_alv.
+
+        IF i_vbakp-vbeln NE i_vbkd-vbeln.
+          EXIT.
+        ENDIF.
+**1-Valida se cliente não tem problemas de crédito
+        CLEAR v_skfor.
+        SELECT skfor FROM knkk
+               INTO v_skfor
+               UP TO 1 ROWS
+               WHERE kunnr = i_vbakp-kunnr.
+        ENDSELECT.
+*Inicio 0001
+*        if not V_SKFOR is initial.
+*          continue.
+*        endif.
+*Fim 0001
+*-----------------------------------------------
+**2-valida shelf-life
+**Inicio 0001
+        PERFORM valida_shelf_life.
+*Inicio 0001
+*        IF v_achou <> 'S'.
+*          CONTINUE.
+*        ENDIF.
+**Fim 0001
+*-----------------------------------------------
+
+**3-Calculo numero de dias de estoque I_ALV-NRDIAS
+        CLEAR: v_ok.
+        PERFORM f_num_dias_estoque.
+*Inicio 0001
+*        IF NOT v_ok IS INITIAL.
+*          CONTINUE.
+*        ENDIF.
+*Fim 0001
+
+*-------------------------------------------------
+**4- Valida local expedicao,peso mínimo e dias de estoque
+        CLEAR: v_ok.
+        PERFORM f_estoque_minimo.
+*Inicio 0001
+*        IF NOT v_ok IS INITIAL.
+*          CONTINUE.
+*        ENDIF.
+*Fim 0001
+
+* RECUPERA nome do cliente
+        SELECT SINGLE name1 INTO v_name1
+               FROM kna1
+               WHERE kunnr = i_vbakp-kunnr.
+
+        CLEAR i_log_ic.
+        READ TABLE i_log_ic_acum WITH KEY vbeln = i_vbakp-vbeln
+                                          posnr = i_vbakp-posnr
+                                          BINARY SEARCH.
+
+        i_alv-vbeln = i_vbakp-vbeln.
+        i_alv-posnr = i_vbakp-posnr.
+        i_alv-vstel = i_vbakp-vstel.  "Local de expedição
+        i_alv-vtweg = i_vbakp-vtweg.  "Canal distribuição
+        i_alv-kdgrp = i_vbkd-kdgrp.   "Grupo de cliente
+        i_alv-konda = i_vbkd-konda.   "Grupo de preços
+        i_alv-kunnr = i_vbakp-kunnr.  "Cliente
+
+
+        i_alv-name1 = v_name1.  "Nome do cliente
+        i_alv-dtapu = i_log_ic_acum-dtapu.  "Dt do corte
+        i_alv-matnr = i_vbakp-matnr.           "Cod.material
+*---------------- recupera sigla e marca do produto---------
+        PERFORM f_recupera_sigla_marca.
+*----------------------------------------------------------
+
+        i_alv-kwmeng = i_vbakp-kwmeng.      "qtde da ordem
+        i_alv-qtdcx  = i_log_ic_acum-qtdcx.  "Qtde cortada
+
+        v_valor_corte = i_vbakp-netpr / i_vbakp-kwmeng.
+        v_valor_corte = i_log_ic_acum-qtdcx * v_valor_corte.
+        i_alv-qtdkg  = v_valor_corte.        "Valor do corte
+*--------------------- grade de entrega------------------
+        CLEAR v_ok.
+        PERFORM f_dias_entrega.
+        IF NOT v_ok IS INITIAL.
+          CONTINUE.
+        ENDIF.
+
+* -------------------------------------------------------
+        i_alv-vkbur = i_vbakp-vkbur.        "Escritório de vendas
+        i_alv-vkgrp = i_vbakp-vkgrp.       "Grupo de vendedores
+*    I_ALV-VEND  = I_VBPA-KUNNR.        "cod.Vendedor
+*Inicio 0001
+        i_alv-vend  = i_vbakp-kunnr.        "cod.Vendedor
+*Fim 0001
+* -------------------recuperar ANALISTA ---------------------
+        PERFORM f_recupera_analista.
+*------------------------------------------------------------
+        i_alv-datum = sy-datum.            "Data execução do painel
+*Inicio 0001
+        i_alv-mcorte = 'Detalhe'.
+*Fim 0001’
+        APPEND i_alv.
+
+      ENDLOOP.
+    ELSE.
+      CONTINUE.
+    ENDIF.
+
+
+  ENDLOOP.
+
+  REFRESH i_inicial.
+  i_inicial[] = i_alv[].
+
+
+  SORT i_alv BY vbeln posnr.
+
+
+
+ENDFORM.                    " F_MONTA_DADOS
+*&---------------------------------------------------------------------*
+*&      Form  valida_shelf_life
+*&---------------------------------------------------------------------*
+FORM valida_shelf_life .
+
+  DATA: v_mfrgr LIKE marc-mfrgr,
+        v_nrdias(4) TYPE n,
+        v_dtcli LIKE lips-erdat,
+        v_vfdat LIKE mcha-vfdat.
+
+  SELECT SINGLE mfrgr FROM marc INTO v_mfrgr
+         WHERE matnr = i_vbakp-matnr AND
+               werks = i_vbakp-werks.
+
+  READ TABLE i_mara WITH KEY matnr = i_vbakp-matnr
+                             BINARY SEARCH.
+
+*-> % Restrição Shelf
+  CLEAR:  v_achou,v_perc.
+  CALL FUNCTION 'ZSAD_SD_SHELF_LIFE'
+    EXPORTING
+      werks           = i_vbakp-werks
+      matnr           = i_vbakp-matnr
+      mfrgr           = v_mfrgr
+      tempb           = i_mara-tempb
+      kunnr           = i_vbakp-kunnr
+      kdgrp           = i_vbkd-kdgrp
+      data            = sy-datum
+    IMPORTING
+      perc_shelf_life = v_perc
+      achou           = v_achou.
+
+  IF v_achou <> 'S'.
+    EXIT.
+  ENDIF.
+*Inicio 0001
+  TRANSLATE v_perc USING ',.'.
+*  replace v_perc TO v_perc_aux.
+*Fim 0001
+
+* i_mara-mhdhb -> prazo de validade do produto
+  v_nrdias = i_mara-mhdhb * v_perc.
+
+  SELECT matnr werks lgort charg clabs lvorm
+         INTO TABLE i_mchb
+         FROM mchb
+         WHERE matnr = i_vbakp-matnr AND
+               werks = i_vbakp-werks AND
+               charg = '001'.
+
+  LOOP AT i_mchb.
+
+    IF NOT i_mchb-clabs IS INITIAL AND
+       i_mchb-lvorm IS INITIAL.
+
+      SELECT SINGLE vfdat INTO v_vfdat
+             FROM mcha
+             WHERE matnr = i_mchb-matnr AND
+                   werks = i_mchb-werks AND
+                   charg = i_mchb-charg.
+*Calculo da data aceita pelo cliente
+      v_dtcli = sy-datum + v_nrdias.
+
+      IF v_dtcli < v_vfdat.
+        " data aceita pelo cliente < que data validade
+        v_achou = 'N'.
+      ELSE.
+        v_achou = 'S'.
+        EXIT.
+      ENDIF.
+
+    ENDIF.
+
+  ENDLOOP.
+ENDFORM.                    " valida_shelf_life
+*&---------------------------------------------------------------------*
+*&      Form  F_elimina_recuperacao
+*&---------------------------------------------------------------------*
+FORM f_elimina_recuperacao .
+
+  DATA: v_datum LIKE sy-datum.
+
+  v_datum = sy-datum - p_dias.
+
+  SELECT * INTO TABLE i_rec_gravado
+         FROM ztsd_recuperacao
+         WHERE dtapu < v_datum.
+
+  DELETE ztsd_recuperacao FROM TABLE i_rec_gravado.
+
+  IF sy-subrc EQ 0.
+    COMMIT WORK.
+  ENDIF.
+
+
+ENDFORM.                    " F_elimina_recuperacao
+*&---------------------------------------------------------------------*
+*&      Form  f_num_dias_estoque
+*&---------------------------------------------------------------------*
+FORM f_num_dias_estoque .
+  DATA: v_labst LIKE mard-labst,
+        v_calc(8) TYPE p DECIMALS 3,
+        v_int TYPE i.
+
+  SELECT SINGLE labst INTO v_labst
+         FROM mard
+         WHERE matnr = i_vbakp-matnr AND
+               werks = i_vbakp-werks AND
+               lgort = '001'.
+
+  SELECT SINGLE * INTO ztsd_consenso
+         FROM ztsd_consenso
+         WHERE  matnr = i_vbakp-matnr AND
+                werks = i_vbakp-werks.
+
+  IF sy-subrc <> 0.
+* grava log de erro.
+    CLEAR i_log_erro.
+    i_log_erro-vbeln = i_vbakp-vbeln.
+    i_log_erro-posnr = i_vbakp-posnr.
+    i_log_erro-matnr = i_vbakp-matnr.
+    i_log_erro-werks = i_vbakp-werks.
+    i_log_erro-vstel = i_vbakp-vstel.
+    i_log_erro-obs =
+    'Tabela de Consenso não cadastrado transação ZSD390'.
+    APPEND i_log_erro.
+    v_ok = 'E'.
+    EXIT.
+  ENDIF.
+
+  IF sy-datum GE ztsd_consenso-dtinicio AND
+     sy-datum LE ztsd_consenso-dtfim.
+  ELSE.
+* grava log de erro.
+    CLEAR i_log_erro.
+    i_log_erro-vbeln = i_vbakp-vbeln.
+    i_log_erro-posnr = i_vbakp-posnr.
+    i_log_erro-matnr = i_vbakp-matnr.
+    i_log_erro-werks = i_vbakp-werks.
+    i_log_erro-vstel = i_vbakp-vstel.
+    i_log_erro-obs =
+    'Consenso fora da data de validade transação ZSD390'.
+    APPEND i_log_erro.
+    v_ok = 'E'.
+    EXIT.
+  ENDIF.
+  v_calc = '4.5'.
+  v_calc = ztsd_consenso-consenso /  v_calc.
+  v_int = v_labst / v_calc.
+
+  i_alv-nrdias = v_int.
+ENDFORM.                    " f_num_dias_estoque
+*&---------------------------------------------------------------------*
+*&      Form  F_ESTOQUE_MINIMO
+*&---------------------------------------------------------------------*
+FORM f_estoque_minimo .
+
+  READ TABLE i_estoque_min WITH KEY vstel = i_vbakp-vstel
+                                    BINARY SEARCH.
+
+  IF sy-subrc <> 0.
+    CLEAR i_log_erro.
+    i_log_erro-vbeln = i_vbakp-vbeln.
+    i_log_erro-posnr = i_vbakp-posnr.
+    i_log_erro-matnr = i_vbakp-matnr.
+    i_log_erro-werks = i_vbakp-werks.
+    i_log_erro-vstel = i_vbakp-vstel.
+    i_log_erro-obs =
+    'Estoque minimo não cad.para o local de expedição (zsd390)'.
+    APPEND i_log_erro.
+    v_ok = 'E'.
+    EXIT.
+  ENDIF.
+
+  IF i_alv-nrdias < i_estoque_min-nrdias.
+    CLEAR i_log_erro.
+    i_log_erro-vbeln = i_vbakp-vbeln.
+    i_log_erro-posnr = i_vbakp-posnr.
+    i_log_erro-matnr = i_vbakp-matnr.
+    i_log_erro-werks = i_vbakp-werks.
+    i_log_erro-vstel = i_vbakp-vstel.
+    i_log_erro-obs =
+    'Nr dias de estoque min p/ local de expedição não atingido'.
+    APPEND i_log_erro.
+    v_ok = 'E'.
+    EXIT.
+  ENDIF.
+
+  IF i_vbakp-ntgew < i_estoque_min-ntgew.
+    CLEAR i_log_erro.
+    i_log_erro-vbeln = i_vbakp-vbeln.
+    i_log_erro-posnr = i_vbakp-posnr.
+    i_log_erro-matnr = i_vbakp-matnr.
+    i_log_erro-werks = i_vbakp-werks.
+    i_log_erro-vstel = i_vbakp-vstel.
+    i_log_erro-obs = 'Peso mínimo p/ local de expedição não atingido'.
+    APPEND i_log_erro.
+    v_ok = 'E'.
+    EXIT.
+
+  ENDIF.
+
+ENDFORM.                    " F_ESTOQUE_MINIMO
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_0200  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_0200 OUTPUT.
+  SET PF-STATUS '0200'.
+  SET TITLEBAR '0200'.
+
+ENDMODULE.                 " STATUS_0200  OUTPUT
+*&---------------------------------------------------------------------*
+*&      Module  inicializa_lista_0200  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE inicializa_lista_0200 OUTPUT.
+
+  LEAVE TO LIST-PROCESSING.
+  NEW-PAGE
+  LINE-SIZE 120
+  LINE-COUNT 27.
+
+  PERFORM f_impressao_0200.
+  LEAVE TO SCREEN 0.
+
+
+ENDMODULE.                 " inicializa_lista_0200  OUTPUT
+*&---------------------------------------------------------------------*
+*&      Form  f_impressao_0200
+*&---------------------------------------------------------------------*
+FORM f_impressao_0200 .
+
+  FORMAT INTENSIFIED OFF COLOR = 2.
+  LOOP AT i_log_erro.
+    WRITE: / i_log_erro-vbeln(10),
+           i_log_erro-posnr(6),
+           i_log_erro-matnr(18),
+           i_log_erro-werks(4),
+           i_log_erro-vstel(4),
+           i_log_erro-obs(60).
+*           120 SPACE.
+  ENDLOOP.
+
+
+ENDFORM.                    " f_impressao_0200
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_0200  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_0200 INPUT.
+
+  CASE ok_code.
+    WHEN 'BACK'.
+      CLEAR ok_code.
+      LEAVE SCREEN .
+  ENDCASE.
+
+
+ENDMODULE.                 " USER_COMMAND_0200  INPUT
+*&---------------------------------------------------------------------*
+*&      Form  f_cabecalho
+*&---------------------------------------------------------------------*
+FORM f_cabecalho .
+
+  IF sy-dynnr EQ '0200'.
+    WRITE: 'Ordem', '     Item',
+           20 'Material',
+           37 'Centro',
+           44 'Local',
+           55 'Ocorrência',
+           120 space.
+    ULINE.
+  ELSEIF sy-dynnr EQ '0300'.
+    WRITE: 'Teste', '     Item',
+           20 'Material',
+           37 'Centro',
+           44 'Local',
+           55 'Ocorrência',
+           120 space.
+    ULINE.
+
+  ENDIF.
+
+ENDFORM.                    " f_cabecalho
+*&---------------------------------------------------------------------*
+*&      Form  f_busca_motivo_corte
+*&---------------------------------------------------------------------*
+FORM f_busca_motivo_corte .
+  break aballima.
+*Posiciona o registro que o usuário clicou
+  READ TABLE i_alv INDEX sy_tabix_alv.
+*Seleciona os motivos de corte.
+  SELECT vbeln posnr abgru qtdcx qtdkg
+  INTO TABLE i_mot_corte
+  FROM zsad_sd_log_ic
+  WHERE vbeln EQ i_alv-vbeln
+    AND posnr EQ i_alv-posnr
+    AND dtapu EQ i_alv-dtapu.
+  IF sy-subrc IS INITIAL.
+    LOOP AT i_mot_corte.
+      i_mot_corte-matnr = i_alv-matnr.
+      MODIFY i_mot_corte.
+    ENDLOOP.
+    CALL SCREEN 0300.
+  ENDIF.
+ENDFORM.                    " f_busca_motivo_corte
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_0300  OUTPUT
+*&---------------------------------------------------------------------*
+MODULE status_0300 OUTPUT.
+  SET PF-STATUS '0300'.
+  SET TITLEBAR '0300'.
+
+ENDMODULE.                 " STATUS_0300  OUTPUT
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_0300  INPUT
+*&---------------------------------------------------------------------*
+MODULE user_command_0300 INPUT.
+  CASE ok_code.
+    WHEN 'BACK'.
+      CLEAR ok_code.
+      LEAVE SCREEN .
+  ENDCASE.
+ENDMODULE.                 " USER_COMMAND_0300  INPUT
+*&---------------------------------------------------------------------*
+*&      Module  inicializa_0300  OUTPUT
+*&---------------------------------------------------------------------*
+MODULE inicializa_0300 OUTPUT.
+
+  LEAVE TO LIST-PROCESSING.
+  NEW-PAGE
+  LINE-SIZE 120
+  LINE-COUNT 27.
+
+  PERFORM f_impressao_0300.
+  LEAVE TO SCREEN 0.
+
+
+ENDMODULE.                 " inicializa_0300  OUTPUT
+*&---------------------------------------------------------------------*
+*&      Form  f_impressao_0300
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM f_impressao_0300 .
+
+  FORMAT INTENSIFIED OFF COLOR = 2.
+  LOOP AT i_mot_corte.
+    WRITE:
+*    / i_mot_corte-vbeln.
+*      LIKE vbap-vbeln, "Documento de vendas
+*       posnr LIKE vbap-posnr, "Item do documento de venda
+*       matnr LIKE vbap-matnr, "Nº do material
+*       abgru LIKE zsad_sd_log_ic-abgru, "Motivo de recusa
+*       qtdcx LIKE zsad_sd_log_ic-qtdcx, "Quantidade do corte em Caixas
+*       qtdkg LIKE zsad_sd_log_ic-qtdkg, "Quantidade do corte em Kilos
+*
+    / i_log_erro-vbeln(10),
+           i_log_erro-posnr(6),
+           i_log_erro-matnr(18),
+           i_log_erro-werks(4),
+           i_log_erro-vstel(4),
+           i_log_erro-obs(60).
+*           120 SPACE.
+  ENDLOOP.
+
+ENDFORM.                    " f_impressao_0300

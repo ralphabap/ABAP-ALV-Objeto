@@ -1,0 +1,2649 @@
+*-----------------------------------------------------------------------
+* Empresa..: Global
+* ID.......:
+* Programa.: ZGLRHR0003_ASSOCIA_FUNC_ONDA
+* Tipo.....: Report
+* Módulo...: HR
+* Transação: ZGLHR065
+* Descrição: Associa Funcionários à Onda
+* Autor....: Gustavo Meschini Rocha
+* Data.....: 02/07/2007
+*
+*                           [HISTÓRICO]
+* ======== ============ ========== =====================================
+*   Data     Autor        Request               Descrição
+* ======== ============ ========== =====================================
+* 02/07/07 O3GUSTAVOMR  E03K9A0PDN Desenvolvimento inicial
+* ======== ============ ========== =====================================
+*-----------------------------------------------------------------------
+report zglrhr0003_associa_func_onda message-id zhr.
+
+*----------------------------------------------------------------------*
+* Tabelas Transparentes
+*----------------------------------------------------------------------*
+tables: ztbhr_empresa_dp, pa0000, pa0001, pa0008, hrp1000, hrp1001,
+        hrhap.
+
+*----------------------------------------------------------------------*
+* Infotipos
+*----------------------------------------------------------------------*
+infotypes: 0000, 0001.
+
+*----------------------------------------------------------------------*
+* Tipos
+*----------------------------------------------------------------------*
+types: begin of y_mcode_empresa,
+         empresa like ztbhr_empresa_dp-unidade,
+       end of y_mcode_empresa,
+
+       begin of y_mcode_grupo,
+         slgrp like t710-slgrp,
+       end of y_mcode_grupo,
+
+       begin of y_empresa_dp,
+         bukrs   like ztbhr_empresa_dp-bukrs,
+         empresa like ztbhr_empresa_dp-unidade,
+       end of y_empresa_dp,
+
+       begin of y_pa0001,
+         pernr  like pa0001-pernr,
+         bukrs  like pa0001-bukrs,
+         werks  like pa0001-werks,
+         gsber  like pa0001-gsber,
+         btrtl  like pa0001-btrtl,
+         orgeh  like pa0001-orgeh,
+         plans  like pa0001-plans,
+         stell  like pa0001-stell,
+         ename  like pa0001-ename,
+         orgref like hrp1001-sobid,
+         idref  like hrhap_appee-id,
+         perref like hrp1001-sobid,
+       end of y_pa0001,
+
+       begin of y_pa0008,
+         pernr like pa0008-pernr,
+         trfgr like pa0008-trfgr,
+       end of y_pa0008,
+
+       begin of y_pa0105,
+         pernr      like pa0105-pernr,
+         usrid_long like pa0105-usrid_long,
+       end of y_pa0105,
+
+       begin of y_hrp1000,
+         otype like hrp1000-otype,
+         objid like hrp1000-objid,
+         istat like hrp1000-istat,
+         stext like hrp1000-stext,
+       end of y_hrp1000,
+
+       begin of y_hrp1001,
+         otype  like hrp1001-otype,
+         objid  like hrp1001-objid,
+         istat  like hrp1001-istat,
+         begda  like hrp1001-begda,
+         endda  like hrp1001-endda,
+         sclas  like hrp1001-sclas,
+         sobid  like hrp1001-sobid,
+         objref like hrp1000-objid,
+       end of y_hrp1001,
+
+       begin of y_t001,
+         bukrs like t001-bukrs,
+         butxt like t001-butxt,
+       end of y_t001,
+
+       begin of y_tgsbt,
+         gsber like tgsbt-gsber,
+         gtext like tgsbt-gtext,
+       end of y_tgsbt,
+
+       begin of y_t527x,
+         orgeh like t527x-orgeh,
+         orgtx like t527x-orgtx,
+       end of y_t527x,
+
+       begin of y_t500p,
+         persa like t500p-persa,
+         name1 like t500p-name1,
+       end of y_t500p,
+
+       begin of y_t001p,
+         werks like t001p-werks,
+         btrtl like t001p-btrtl,
+         btext like t001p-btext,
+       end of y_t001p,
+
+       begin of y_t513s,
+         stell like t513s-stell,
+         stltx like t513s-stltx,
+       end of y_t513s,
+
+       begin of y_aux_pa0001,
+         stell like p0001-stell,
+         begda like p0001-begda,
+         endda like p0001-endda,
+         aedtm like p0001-aedtm,
+       end of y_aux_pa0001,
+
+       begin of y_aval,
+         valor like ztbhr_param_aval-valor,
+       end of y_aval,
+
+       begin of y_appee,
+         appraisal_id like hrhap_appee-appraisal_id,
+         id           like hrhap_appee-id,
+         combined_key like hrhap_appee-combined_key,
+       end of y_appee,
+
+       begin of y_basic,
+         appraisal_id like hrhap_basic-appraisal_id,
+         row_iid      like hrhap_basic-row_iid,
+         element_id   like hrhap_basic-element_id,
+         combined_key like hrhap_basic-combined_key,
+       end of y_basic,
+
+       begin of y_hrhap,
+         appraisal_id like hrhap-appraisal_id,
+         change_date  like hrhap-change_date,
+         pernr_ref    like pa0001-pernr,
+       end of y_hrhap,
+
+       begin of y_rel,
+         sel           type c,
+         pernr         like pa0001-pernr,
+         empresa       like ztbhr_empresa_dp-unidade,
+         bukrs         like pa0001-bukrs,
+         butxt         like t001-butxt,
+         gsber         like pa0001-gsber,
+         gtext         like tgsbt-gtext,
+         orgeh         like pa0001-orgeh,
+         orgtx         like t527x-orgtx,
+         werks         like pa0001-werks,
+         name1         like t500p-name1,
+         btrtl         like pa0001-btrtl,
+         btext         like t001p-btext,
+         pipe          like hrp1000-objid,
+         desc_pipe     like hrp1000-stext,
+         fami          like hrp1000-objid,
+         desc_fami     like hrp1000-stext,
+         ename         like pa0001-ename,
+         stell         like pa0001-stell,
+         stltx         like t513s-stltx,
+         plans         like pa0001-plans,
+         fgestor       type c,
+         gestor        like pa0001-pernr,
+         nome_gestor   like pa0001-ename,
+         email_gestor  like pa0105-usrid_long,
+         trfgr         like pa0008-trfgr,
+         email         like pa0105-usrid_long,
+         dt_ult_aval   like hrhap-change_date,
+         dt_admissao   like pa0000-begda,
+         dt_ini_cargo  like pa0001-begda,
+         dt_ini_pipe   like hrp1001-begda,
+         mensagem(250) type c,
+         perref        like hrp1001-sobid,
+       end of y_rel,
+
+       begin of y_log,
+         linha(255) type c,
+       end of y_log.
+
+* Tipos para ALV
+type-pools: vrm,
+            slis,
+            kkblo.
+
+*----------------------------------------------------------------------*
+* Estruturas
+*----------------------------------------------------------------------*
+data: w_empresa_dp    type y_empresa_dp,
+      w_pa0001        type y_pa0001,
+      w_pa0008        type y_pa0008,
+      w_pa0105        type y_pa0105,
+      w_hrp1000       type y_hrp1000,
+      w_hrp1001       type y_hrp1001,
+      w_t001          type y_t001,
+      w_tgsbt         type y_tgsbt,
+      w_t527x         type y_t527x,
+      w_t500p         type y_t500p,
+      w_t001p         type y_t001p,
+      w_t513s         type y_t513s,
+      w_aval          type y_aval,
+      w_appee         type y_appee,
+      w_hrhap         type y_hrhap,
+      w_rel           type y_rel,
+      w_log           type y_log,
+      w_html          type htmlline.
+
+* Estruturas para ALV
+data: w_header        type kkblo_listheader,
+      w_alv_layout    type slis_layout_alv,
+      w_variant       type disvariant,
+      w_alv_event     type slis_alv_event.
+
+*----------------------------------------------------------------------*
+* Tabelas Internas
+*----------------------------------------------------------------------*
+data: t_mcode_empresa type table of y_mcode_empresa,
+      t_mcode_grupo   type table of y_mcode_grupo,
+      t_empresa_dp    type table of y_empresa_dp,
+      t_pa0001        type table of y_pa0001,
+      t_pa0008        type table of y_pa0008,
+      t_pa0105        type table of y_pa0105,
+      t_hrp1000       type table of y_hrp1000,
+      t_hrp1001       type table of y_hrp1001,
+      t_hrp1001aux    type table of y_hrp1001,
+      t_gestor        type table of y_hrp1001,
+      t_t001          type table of y_t001,
+      t_tgsbt         type table of y_tgsbt,
+      t_t527x         type table of y_t527x,
+      t_t500p         type table of y_t500p,
+      t_t001p         type table of y_t001p,
+      t_t513s         type table of y_t513s,
+      t_aval          type table of y_aval,
+      t_appee         type table of y_appee,
+      t_basic         type table of y_basic,
+      t_hrhap         type table of y_hrhap,
+      t_rel           type table of y_rel,
+      t_log           type table of y_log,
+      t_html          type table of htmlline.
+
+* Tabelas Internas para ALV
+data: t_alv_header    type kkblo_t_listheader,
+      t_alv_fieldcat  type slis_t_fieldcat_alv with header line,
+      t_alv_sort      type slis_t_sortinfo_alv with header line,
+      t_alv_event     type table of slis_alv_event,
+      t_excluding     type slis_t_extab.
+
+*----------------------------------------------------------------------*
+* Variáveis Globais
+*----------------------------------------------------------------------*
+data: v_repid            like sy-repid,
+      v_istat            like hrp1000-istat,
+      v_begonda          like hrp1000-begda,
+      v_endonda          like hrp1000-endda,
+      v_desc_onda        like hrp1000-stext,
+      v_flag_9000        type c,
+      v_custom_container type ref to cl_gui_custom_container,
+      v_html_viewer      type ref to cl_gui_html_viewer,
+      v_url(80)          type c.
+
+*----------------------------------------------------------------------*
+* Constantes
+*----------------------------------------------------------------------*
+constants:
+  c_x                 type c                     value 'X',
+  c_r                 type c                     value 'R',
+  c_c                 type c                     value 'C',
+  c_h                 type c                     value 'H',
+  c_s                 type c                     value 'S',
+  c_a                 type c                     value 'A',
+  c_e                 type c                     value 'E',
+  c_dats(4)           type c                     value 'DATS',
+  c_numc(4)           type c                     value 'NUMC',
+  c_hifen             type c                     value '-',
+  c_virgula           type c                     value ',',
+  c_low               type c                     value 'L',
+  c_high              type c                     value 'H',
+  c_sign_i            type c                     value 'I',
+  c_sign_e            type c                     value 'E',
+  c_option_eq(2)      type c                     value 'EQ',
+  c_option_ne(2)      type c                     value 'NE',
+  c_tabela(5)         type c                     value 'T_REL',
+  c_infty_1001        like hrp1001-infty         value '1001',
+  c_subty_0010        like pa0105-subty          value '0010',
+  c_plvar_01          like hrp1000-plvar         value '01',
+  c_otype_s           like hrp1000-otype         value 'S',
+  c_otype_o           like hrp1000-otype         value 'O',
+  c_otype_p           like hrp1000-otype         value 'P',
+  c_otype_1o          like hrp1000-otype         value '1O',
+  c_otype_1p          like hrp1000-otype         value '1P',
+  c_otype_1f          like hrp1000-otype         value '1F',
+  c_otype_va          like hrp1000-otype         value 'VA',
+  c_istat_1           like hrp1000-istat         value '1',
+  c_istat_2           like hrp1000-istat         value '2',
+  c_istat_3           like hrp1000-istat         value '3',
+  c_istat_4           like hrp1000-istat         value '4',
+  c_istat_5           like hrp1000-istat         value '5',
+  c_rsign_a           like hrp1001-rsign         value 'A',
+  c_rsign_b           like hrp1001-rsign         value 'B',
+  c_relat_003         like hrp1001-relat         value '003',
+  c_relat_007         like hrp1001-relat         value '007',
+  c_relat_012         like hrp1001-relat         value '012',
+  c_stat2_3           like pa0000-stat2          value '3',
+  c_low_date          type begdatum              value '18000101',
+  c_high_date         type enddatum              value '99991231',
+  c_default(8)        type c                     value '/DEFAULT',
+  c_param_0009        type zdehr_codparam        value '0009',
+  c_param_0010        type zdehr_codparam        value '0010',
+  c_ap_status_5       like hrhap-ap_status       value '5'.
+
+*----------------------------------------------------------------------*
+* Ranges
+*----------------------------------------------------------------------*
+ranges: r_bukrs    for pa0001-bukrs,
+        r_codparam for ztbhr_param_aval-codparam,
+        r_elem_id  for hrhap_basic-element_id,
+        r_pipes    for hrp1001-sobid,
+        r_istat    for hrp1000-istat.
+
+
+*----------------------------------------------------------------------*
+* Macros
+*----------------------------------------------------------------------*
+* Inclui linha na tabela HTML
+define append_html.
+  clear w_html.
+  w_html = &1.
+  append w_html to t_html.
+end-of-definition.
+
+* Inicia bloco HTML
+define init_html.
+  free t_html.
+  append_html: '<HTML>',
+               '<head>',
+               '<TITLE> </TITLE>',
+               '</head>',
+               '<body bgcolor=#F5F5F5>'.
+end-of-definition.
+
+* Finaliza bloco HTML
+define end_html.
+  append_html: '</body>',
+               '</html>'.
+end-of-definition.
+
+*----------------------------------------------------------------------*
+* Tela de Seleção
+*----------------------------------------------------------------------*
+selection-screen: begin of block b1 with frame title text-t01.
+parameter: p_onda like hrp1000-objid obligatory.
+selection-screen: end of block b1.
+
+selection-screen: begin of block b2 with frame title text-t02.
+select-options: s_empr   for ztbhr_empresa_dp-unidade obligatory,
+                s_bukrs  for pa0001-bukrs,
+                s_gsber  for pa0001-gsber,
+                s_werks  for pa0001-werks,
+                s_btrtl  for pa0001-btrtl,
+                s_orgeh  for pa0001-orgeh,
+                s_pipe   for hrp1000-objid,
+                s_fami   for hrp1000-objid,
+                s_trfgr  for pa0008-trfgr,
+                s_stell  for pa0001-stell,
+                s_gestor for pa0000-pernr
+                         matchcode object prem,
+                s_tvoto  for pa0000-begda,
+                s_tcarg  for pa0001-begda,
+                s_tpipe  for hrp1001-begda,
+                s_uaval  for hrhap-ap_start_date,
+                s_func   for pa0000-pernr
+                         matchcode object prem.
+selection-screen: end of block b2.
+
+selection-screen: begin of block b3 with frame title text-t21.
+parameters: p_vari like disvariant-variant default c_default.
+selection-screen: end of block b3.
+*----------------------------------------------------------------------*
+* Evento INITIALIZATION
+*----------------------------------------------------------------------*
+initialization.
+
+  data: l_memoria(18) type c,
+        l_objid       like hrp1000-objid.
+
+  move sy-repid to v_repid.
+  clear w_variant.
+  w_variant-report   = sy-repid.
+  w_variant-username = sy-uname.
+
+  concatenate 'IDONDA' sy-uname into l_memoria.
+
+  import l_objid from memory id l_memoria.
+  if sy-subrc eq 0.
+    p_onda = l_objid.
+    delete from memory id l_memoria.
+  else.
+    clear p_onda.
+  endif.
+
+  refresh: r_istat.
+  r_istat-sign   = c_sign_i.
+  r_istat-option = c_option_eq.
+  r_istat-low    = c_istat_2.
+  append r_istat.
+  r_istat-low    = c_istat_3.
+  append r_istat.
+  clear: r_istat.
+
+*----------------------------------------------------------------------*
+* Evento AT SELECTION-SCREEN
+*----------------------------------------------------------------------*
+at selection-screen.
+  perform zf_valida_campos.
+
+*----------------------------------------------------------------------*
+* Evento AT SELECTION-SCREEN ON VALUE-REQUEST
+*----------------------------------------------------------------------*
+* Match-code para layout de exibição de ALV
+at selection-screen on value-request for p_vari.
+  perform zf_help_variante using v_repid
+                                 sy-uname
+                        changing w_variant
+                                 p_vari.
+
+* Match-code de Onda
+at selection-screen on value-request for p_onda.
+  perform zf_f4_onda.
+
+* Match-code de Empresa - Low
+at selection-screen on value-request for s_empr-low.
+  perform zf_f4_empresa using c_low.
+
+* Match-code de Empresa - High
+at selection-screen on value-request for s_empr-high.
+  perform zf_f4_empresa using c_high.
+
+* Match-code de Pipeline - Low
+at selection-screen on value-request for s_pipe-low.
+  perform zf_f4_pipe using c_low.
+
+* Match-code de Pipeline - High
+at selection-screen on value-request for s_pipe-high.
+  perform zf_f4_pipe using c_high.
+
+* Match-code de Família - Low
+at selection-screen on value-request for s_fami-low.
+  perform zf_f4_fami using c_low.
+
+* Match-code de Família - High
+at selection-screen on value-request for s_fami-high.
+  perform zf_f4_fami using c_high.
+
+* Match-code de Grupo Salarial - Low
+at selection-screen on value-request for s_trfgr-low.
+  perform zf_f4_trfgr using c_low.
+
+* Match-code de Grupo Salarial - High
+at selection-screen on value-request for s_trfgr-high.
+  perform zf_f4_trfgr using c_high.
+
+* Match-code de Unidade Organizacional - Low
+at selection-screen on value-request for s_orgeh-low.
+  perform zf_f4_orgeh using c_low.
+
+* Match-code de Unidade Organizacional - High
+at selection-screen on value-request for s_orgeh-high.
+  perform zf_f4_orgeh using c_high.
+
+*----------------------------------------------------------------------*
+* Evento START-OF-SELECTION
+*----------------------------------------------------------------------*
+start-of-selection.
+
+  perform zf_seleciona_dados.
+
+  perform zf_monta_tab_rel.
+
+*----------------------------------------------------------------------*
+* Evento END-OF-SELECTION
+*----------------------------------------------------------------------*
+end-of-selection.
+
+  if t_rel is initial.
+    message i000 display like c_e with text-e06.
+    leave list-processing.
+  else.
+    perform: zf_estrutura_alv,
+             zf_eventos_alv,
+             zf_exibe_alv,
+             zf_libera_memoria.
+  endif.
+
+*&---------------------------------------------------------------------*
+*&      Form  zf_help_variante
+*&---------------------------------------------------------------------*
+* Match-code para variante de exibição
+*----------------------------------------------------------------------*
+form zf_help_variante using p_repid    like sy-repid
+                            p_uname    like sy-uname
+                   changing p_variant  type disvariant
+                            p_variante like disvariant-variant.
+
+  data: l_exit type c.
+
+* popup F4 help to select a layout
+  p_variant-report   = p_repid.
+  p_variant-username = p_uname.
+
+  call function 'LVC_VARIANT_F4'
+    exporting
+      is_variant = p_variant
+      i_save     = c_a
+    importing
+      e_exit     = l_exit
+      es_variant = p_variant
+    exceptions
+      not_found  = 1
+      others     = 2.
+
+  if sy-subrc ne 0.
+    message id sy-msgid type sy-msgty number sy-msgno
+            with sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  else.
+    if l_exit ne c_x.
+      p_variante = p_variant-variant.
+    endif.
+  endif.
+
+endform.                    " zf_help_variante
+*&---------------------------------------------------------------------*
+*&      Form  zf_f4_onda
+*&---------------------------------------------------------------------*
+* Match-code de Onda
+*----------------------------------------------------------------------*
+form zf_f4_onda.
+
+  data: lw_objec like objec.
+
+  call function 'RH_OBJID_REQUEST'
+    exporting
+      plvar             = c_plvar_01
+      otype             = c_otype_1o
+      seark             = '*'
+      dynpro_repid      = sy-repid
+      dynpro_dynnr      = sy-dynnr
+      dynpro_searkfield = 'P_ONDA'
+    importing
+      sel_object        = lw_objec
+    exceptions
+      cancelled         = 1
+      wrong_condition   = 2
+      nothing_found     = 3
+      illegal_mode      = 4
+      internal_error    = 5
+      others            = 6.
+
+  check sy-subrc eq 0.
+
+  move lw_objec-realo to p_onda.
+
+endform.                    " zf_f4_onda
+*&---------------------------------------------------------------------*
+*&      Form  zf_f4_empresa
+*&---------------------------------------------------------------------*
+* Match-code de Empresa
+*----------------------------------------------------------------------*
+form zf_f4_empresa using p_campo type c.
+
+  data : lt_retorno type table of ddshretval,
+         lw_retorno type ddshretval.
+
+  if t_mcode_empresa is initial.
+    select unidade
+      into table t_mcode_empresa
+      from ztbhr_empresa_dp.
+    sort t_mcode_empresa.
+    delete adjacent duplicates from t_mcode_empresa.
+  endif.
+
+  call function 'F4IF_INT_TABLE_VALUE_REQUEST'
+    exporting
+      retfield        = 'EMPRESA'
+      dynpprog        = sy-repid
+      dynpnr          = sy-dynnr
+      dynprofield     = 'S_EMPR-LOW'
+      value_org       = 'S'
+    tables
+      value_tab       = t_mcode_empresa
+      return_tab      = lt_retorno
+    exceptions
+      parameter_error = 1
+      no_values_found = 2
+      others          = 3.
+
+  check sy-subrc eq 0.
+
+  read table lt_retorno into lw_retorno index 1.
+  check sy-subrc eq 0.
+  if p_campo eq c_low.
+    move lw_retorno-fieldval to s_empr-low.
+  elseif p_campo eq c_high.
+    move lw_retorno-fieldval to s_empr-high.
+  endif.
+  refresh lt_retorno.
+
+endform.                    " zf_f4_empresa
+*&---------------------------------------------------------------------*
+*&      Form  zf_f4_pipe
+*&---------------------------------------------------------------------*
+* Match-code de Pipeline
+*----------------------------------------------------------------------*
+form zf_f4_pipe using p_campo type c.
+
+  data: lw_objec like objec.
+
+  call function 'RH_OBJID_REQUEST'
+    exporting
+      plvar             = c_plvar_01
+      otype             = c_otype_1p
+      seark             = '*'
+      dynpro_repid      = sy-repid
+      dynpro_dynnr      = sy-dynnr
+      dynpro_searkfield = 'S_PIPE-LOW'
+    importing
+      sel_object        = lw_objec
+    exceptions
+      cancelled         = 1
+      wrong_condition   = 2
+      nothing_found     = 3
+      illegal_mode      = 4
+      internal_error    = 5
+      others            = 6.
+
+  check sy-subrc eq 0.
+
+  if p_campo eq c_low.
+    move lw_objec-realo to s_pipe-low.
+  else.
+    move lw_objec-realo to s_pipe-high.
+  endif.
+
+endform.                    " zf_f4_pipe
+*&---------------------------------------------------------------------*
+*&      Form  zf_f4_fami
+*&---------------------------------------------------------------------*
+* Match-code de Família
+*----------------------------------------------------------------------*
+form zf_f4_fami using p_campo type c.
+
+  data: lw_objec like objec.
+
+  call function 'RH_OBJID_REQUEST'
+    exporting
+      plvar             = c_plvar_01
+      otype             = c_otype_1f
+      seark             = '*'
+      dynpro_repid      = sy-repid
+      dynpro_dynnr      = sy-dynnr
+      dynpro_searkfield = 'S_FAMI-LOW'
+    importing
+      sel_object        = lw_objec
+    exceptions
+      cancelled         = 1
+      wrong_condition   = 2
+      nothing_found     = 3
+      illegal_mode      = 4
+      internal_error    = 5
+      others            = 6.
+
+  check sy-subrc eq 0.
+
+  if p_campo eq c_low.
+    move lw_objec-realo to s_fami-low.
+  else.
+    move lw_objec-realo to s_fami-high.
+  endif.
+
+endform.                    " zf_f4_fami
+*&---------------------------------------------------------------------*
+*&      Form  zf_f4_trfgr
+*&---------------------------------------------------------------------*
+* Match-code de Grupo Salarial
+*----------------------------------------------------------------------*
+form zf_f4_trfgr using p_campo type c.
+
+  data: lt_retorno type table of ddshretval,
+        lw_retorno type ddshretval.
+
+  if t_mcode_grupo is initial.
+    select slgrp
+      into table t_mcode_grupo
+      from t710.
+    sort t_mcode_grupo.
+    delete adjacent duplicates from t_mcode_grupo.
+  endif.
+
+  call function 'F4IF_INT_TABLE_VALUE_REQUEST'
+    exporting
+      retfield        = 'SLGRP'
+      dynpprog        = sy-repid
+      dynpnr          = sy-dynnr
+      dynprofield     = 'S_TRFGR-LOW'
+      value_org       = 'S'
+    tables
+      value_tab       = t_mcode_grupo
+      return_tab      = lt_retorno
+    exceptions
+      parameter_error = 1
+      no_values_found = 2
+      others          = 3.
+
+  check sy-subrc eq 0.
+
+  read table lt_retorno into lw_retorno index 1.
+  check sy-subrc eq 0.
+  if p_campo eq c_low.
+    move lw_retorno-fieldval to s_trfgr-low.
+  elseif p_campo eq c_high.
+    move lw_retorno-fieldval to s_trfgr-high.
+  endif.
+  refresh lt_retorno.
+
+endform.                    " zf_f4_trfgr
+*&---------------------------------------------------------------------*
+*&      Form  zf_f4_orgeh
+*&---------------------------------------------------------------------*
+* Match-code de Unidade Organizacional
+*----------------------------------------------------------------------*
+form zf_f4_orgeh using p_campo type c.
+
+  data: lw_objec like objec.
+
+  call function 'RH_OBJID_REQUEST'
+    exporting
+      plvar             = c_plvar_01
+      otype             = c_otype_o
+      seark             = '*'
+      dynpro_repid      = sy-repid
+      dynpro_dynnr      = sy-dynnr
+      dynpro_searkfield = 'S_ORGEH-LOW'
+    importing
+      sel_object        = lw_objec
+    exceptions
+      cancelled         = 1
+      wrong_condition   = 2
+      nothing_found     = 3
+      illegal_mode      = 4
+      internal_error    = 5
+      others            = 6.
+
+  check sy-subrc eq 0.
+
+  if p_campo eq c_low.
+    move lw_objec-realo to s_orgeh-low.
+  else.
+    move lw_objec-realo to s_orgeh-high.
+  endif.
+
+endform.                    " zf_f4_orgeh
+*&---------------------------------------------------------------------*
+*&      Form  zf_estrutura_alv
+*&---------------------------------------------------------------------*
+* Define a estrutura do ALV
+*----------------------------------------------------------------------*
+form zf_estrutura_alv.
+
+  clear:   t_alv_fieldcat, w_alv_layout.
+  refresh: t_alv_fieldcat.
+
+* Monta estrutura Field Catalog do ALV
+  perform zf_campos_impressao using:
+
+* Coluna para Seleção
+    space space space 'SEL' c_tabela space space
+    space space space space space c_x space space c_x space,
+
+* Empresa
+    space space space 'EMPRESA' c_tabela 'ZTBHR_EMPRESA_DP' 'UNIDADE'
+    text-t03 space space '80' space space space space space space,
+
+* Descrição da Empresa
+    space space space 'BUTXT' c_tabela 'T001' 'BUTXT'
+    text-t04 space space '25' space space space space space space,
+
+* Unidade
+    space space space 'GTEXT' c_tabela 'TGSBT' 'GTEXT'
+    text-t05 space space '30' space space space space space space,
+
+* Unidade Organizacional
+    space space space 'ORGTX' c_tabela 'T527X' 'ORGTX'
+    text-t06 space space '25' space space space space space space,
+
+* Área de RH
+    space space space 'NAME1' c_tabela 'T500P' 'NAME1'
+    text-t07 space space '30' space space space space space space,
+
+* Sub-Área de RH
+    space space space 'BTEXT' c_tabela 'T001P' 'BTEXT'
+    text-t08 space space '15' space space space space space space,
+
+* Família
+    space space space 'DESC_FAMI' c_tabela 'HRP1000' 'STEXT'
+    text-t09 space space '40' space space space space space space,
+
+* Nº Pessoal
+    space space space 'PERNR' c_tabela 'PA0001' 'PERNR'
+    text-t20 space c_r '8' space space space space space space,
+
+* Nome
+    space space space 'ENAME' c_tabela 'PA0001' 'ENAME'
+    text-t10 space space '40' space space space space space space,
+
+* Flag de Gestor (Sim/Não)
+    space space space 'FGESTOR' c_tabela space space
+    text-t22 space c_c '1' space space space space space space,
+
+* Cargo
+    space space space 'STLTX' c_tabela 'T513S' 'STLTX'
+    text-t11 space space '25' space space space space space space,
+
+* Pipeline
+    space space space 'DESC_PIPE' c_tabela 'HRP1000' 'STEXT'
+    text-t12 space space '40' space space space space space space,
+
+* Data da Última Avaliação
+    space space space 'DT_ULT_AVAL' c_tabela 'HRP1000' 'BEGDA'
+    text-t13 space c_c '10' c_dats space space space space space,
+
+* Grupo Salarial
+    space space space 'TRFGR' c_tabela 'PA0008' 'TRFGR'
+    text-t14 space space '8' space space space space space space,
+
+* Data de Admissão
+    space space space 'DT_ADMISSAO' c_tabela 'PA0000' 'BEGDA'
+    text-t15 space c_c '10' c_dats space space space space space,
+
+* Gestor
+    space space space 'NOME_GESTOR' c_tabela 'PA0001' 'ENAME'
+    text-t16 space space '40' space space space space space space,
+
+* E-Mail do Gestor
+    space space space 'EMAIL_GESTOR' c_tabela 'PA0105' 'USRID_LONG'
+    text-t24 space space '241' space space space space space space,
+
+* E-Mail do Funcionário
+    space space space 'EMAIL' c_tabela 'PA0105' 'USRID_LONG'
+    text-t17 space space '241' space space space space space space,
+
+* Data de início no cargo
+    space space space 'DT_INI_CARGO' c_tabela 'PA0001' 'BEGDA'
+    text-t18 space c_c '10' c_dats space space space space space,
+
+* Data de início no pipeline
+    space space space 'DT_INI_PIPE' c_tabela 'HRP1001' 'BEGDA'
+    text-t19 space c_c '10' c_dats space space space space space,
+
+* Mensagem - Onda que o funcionário já faz parte no mesmo período
+    space space space 'MENSAGEM' c_tabela space space
+    text-t23 space space '250' space space space space space space,
+
+* Cód. Empresa
+    space space space 'BUKRS' c_tabela space space
+    text-t25 space c_c '4' space space space space space space,
+
+* Cód. Unidade
+    space space space 'GSBER' c_tabela space space
+    text-t26 space c_c '4' space space space space space space,
+
+* Cód. Unidade Org.
+    space space space 'ORGEH' c_tabela space space
+    text-t27 space c_c '8' c_numc space space space space space,
+
+* Cód. Área RH
+    space space space 'WERKS' c_tabela space space
+    text-t28 space c_c '4' space space space space space space,
+
+* Cód. Sub-Área RH
+    space space space 'BTRTL' c_tabela space space
+    text-t29 space c_c '4' space space space space space space,
+
+* Cód. Pipeline
+    space space space 'PIPE' c_tabela space space
+    text-t30 space c_c '8' c_numc space space space space space,
+
+* Cód. Família
+    space space space 'FAMI' c_tabela space space
+    text-t31 space c_c '8' c_numc space space space space space,
+
+* Cód. Cargo
+    space space space 'STELL' c_tabela space space
+    text-t32 space c_c '8' c_numc space space space space space,
+
+* Cód. Posição
+    space space space 'PLANS' c_tabela space space
+    text-t33 space c_c '8' c_numc space space space space space.
+
+* Layout
+  move: c_x   to w_alv_layout-zebra,
+        c_x   to w_alv_layout-colwidth_optimize,
+        c_x   to w_alv_layout-expand_all,
+        'SEL' to w_alv_layout-box_fieldname.
+
+endform.                    " zf_estrutura_alv
+*&---------------------------------------------------------------------*
+*&      Form  zf_campos_impressao
+*&---------------------------------------------------------------------*
+* Monta campos para impressao no ALV
+*----------------------------------------------------------------------*
+form zf_campos_impressao using p_fixc        type c
+                               p_key         type c
+                               p_emph        type c
+                               p_field       type c
+                               p_tab         type c
+                               p_reftab      type c
+                               p_reffield    type c
+                               p_text        type c
+                               p_sum         type c
+                               p_just        type c
+                               p_outputlen   type c
+                               p_datatype    type c
+                               p_no_out      type c
+                               p_mark        type c
+                               p_hotspot     type c
+                               p_edit        type c
+                               p_icon        type c.
+
+* fixa/ congelar coluna
+  t_alv_fieldcat-fix_column = p_fixc.
+
+* column with key-color
+  t_alv_fieldcat-key = p_key.
+
+* Célula
+  t_alv_fieldcat-emphasize = p_emph.
+
+* nome do campo da tabela populada
+  t_alv_fieldcat-fieldname = p_field.
+
+* nome da tabela populada
+  t_alv_fieldcat-tabname = p_tab.
+
+* nome da tabela de referência para nomear header da coluna
+  t_alv_fieldcat-ref_tabname = p_reftab.
+
+* nome da tabela de referência para nomear header da coluna
+  t_alv_fieldcat-ref_tabname = p_reffield.
+
+* nome utilizado no header da coluna
+  t_alv_fieldcat-reptext_ddic = p_text.
+
+* sumarizar coluna
+  t_alv_fieldcat-do_sum = p_sum.
+
+* alinhamento --> 'L/ R/ C'
+  t_alv_fieldcat-just = p_just.
+
+* comprimento de saída
+  t_alv_fieldcat-outputlen = p_outputlen.
+
+* declarar 'CURR'/ 'QUAN'... para campos que terao totais e/ ou
+* subtotais
+* caso este campo nao for declarado os botoes de totais e
+* subtotais ficarao desativados ( subentende-se que nao existem colunas
+* totalizaveis )
+  t_alv_fieldcat-datatype = p_datatype.
+
+* 'X' ocultar campo - disponibiliza campo para modificação do layout
+  t_alv_fieldcat-no_out = p_no_out.
+
+* Caso o campo seja um Checkbox passar 'X'
+  t_alv_fieldcat-checkbox = p_mark.
+
+* Hotspot
+  t_alv_fieldcat-hotspot = p_hotspot.
+
+* Coluna editável
+  t_alv_fieldcat-edit = p_edit.
+
+* Coluna de ícone
+  t_alv_fieldcat-icon = p_icon.
+
+  append t_alv_fieldcat.
+  clear: t_alv_fieldcat.
+
+endform.                    " zf_campos_impressao
+*&---------------------------------------------------------------------*
+*&      Form zf_status
+*&---------------------------------------------------------------------*
+*   PF-status do ALV
+*----------------------------------------------------------------------*
+form zf_status using rt_extab type slis_t_extab.            "#EC
+
+  set pf-status 'ZGHR_STATUS'.
+
+endform.                    " zf_status
+*&---------------------------------------------------------------------*
+*&      Form  zf_top_of_page
+*&---------------------------------------------------------------------*
+* Define o cabeçalho do ALV
+*----------------------------------------------------------------------*
+form zf_top_of_page.                                        "#EC CALLED
+
+  perform zf_cabecalho_alv.
+
+* Executa Cabeçalho via padrão ALV
+  call function 'REUSE_ALV_COMMENTARY_WRITE'
+    exporting
+      it_list_commentary = t_alv_header.
+*      i_logo             = c_logo.
+
+endform.                    " zf_top_of_page
+*&---------------------------------------------------------------------*
+*&      Form  zf_cabecalho_alv
+*&---------------------------------------------------------------------*
+* Monta tabela do cabeçalho do ALV
+*----------------------------------------------------------------------*
+form zf_cabecalho_alv.
+
+  data: l_linha(60) type c,
+        l_qtdreg(5) type n,
+        l_sobid     like hrp1001-sobid,
+        l_begda(10) type c,
+        l_endda(10) type c.
+
+  data: lt_descp type table of y_hrp1000 with header line,
+        lt_pipes type table of y_hrp1001 with header line.
+
+  refresh: t_alv_header, lt_descp, lt_pipes.
+  clear:   t_alv_header, l_linha.
+
+* Título
+  concatenate text-003 p_onda into l_linha
+              separated by space.
+* Verifica se a onda possui outra onda de referência
+  clear: l_sobid.
+  select sobid up to 1 rows
+    into l_sobid
+    from hrp1001
+   where otype eq c_otype_1o
+     and objid eq p_onda
+     and plvar eq c_plvar_01
+     and rsign eq c_rsign_a
+     and relat eq c_relat_003
+     and istat in r_istat
+     and begda eq v_begonda
+     and endda eq v_endonda.
+  endselect.
+  if not l_sobid is initial.
+    call function 'CONVERSION_EXIT_ALPHA_OUTPUT'
+      exporting
+        input  = l_sobid
+      importing
+        output = l_sobid.
+    concatenate l_linha text-015 l_sobid into l_linha
+      separated by space.
+  endif.
+
+  perform zf_campos_cabecalho using c_h space l_linha.
+
+* Descrição da Onda
+  concatenate text-019 v_desc_onda into l_linha
+    separated by space.
+  perform zf_campos_cabecalho using c_s space l_linha.
+
+* Validade da Onda
+  write: v_begonda to l_begda,
+         v_endonda to l_endda.
+  concatenate text-017 l_begda text-018 l_endda into l_linha
+    separated by space.
+  perform zf_campos_cabecalho using c_s space l_linha.
+
+* Seleciona os pipelines da onda
+  select otype objid istat begda endda sclas sobid
+    into table lt_pipes
+    from hrp1001
+   where otype eq c_otype_1o
+     and objid eq p_onda
+     and plvar eq c_plvar_01
+     and istat in r_istat
+     and rsign eq c_rsign_b
+     and relat eq c_relat_003
+     and begda eq v_begonda
+     and endda eq v_endonda
+     and sclas eq c_otype_1p.
+  if sy-subrc eq 0.
+    sort lt_pipes.
+    delete adjacent duplicates from lt_pipes.
+    loop at lt_pipes.
+      move: lt_pipes-sobid to lt_pipes-objref.
+      modify lt_pipes.
+    endloop.
+* Seleciona descrições dos pipelines
+    select otype objid istat stext
+      into table lt_descp
+      from hrp1000
+       for all entries in lt_pipes
+     where plvar eq c_plvar_01
+       and otype eq c_otype_1p
+       and objid eq lt_pipes-objref
+       and istat eq c_istat_1
+       and begda le sy-datum
+       and endda ge sy-datum.
+    if sy-subrc eq 0.
+      clear: l_linha.
+      loop at lt_descp.
+        if l_linha is initial.
+          concatenate text-016 lt_descp-stext(2) into l_linha
+            separated by space.
+          condense l_linha.
+        else.
+          concatenate l_linha c_virgula into l_linha.
+          concatenate l_linha lt_descp-stext(2) into l_linha
+            separated by space.
+          condense l_linha.
+        endif.
+      endloop.
+* Adiciona Pipelines da onda no cabeçalho
+      perform zf_campos_cabecalho using c_s space l_linha.
+    endif.
+  endif.
+
+* Status da Onda
+  case v_istat.
+    when c_istat_1.
+      concatenate text-020 text-021 into l_linha
+        separated by space.
+    when c_istat_2.
+      concatenate text-020 text-022 into l_linha
+        separated by space.
+    when c_istat_3.
+      concatenate text-020 text-023 into l_linha
+        separated by space.
+    when c_istat_4.
+      concatenate text-020 text-024 into l_linha
+        separated by space.
+    when c_istat_5.
+      concatenate text-020 text-025 into l_linha
+        separated by space.
+    when others.
+  endcase.
+  perform zf_campos_cabecalho using c_s space l_linha.
+
+* Quantidade de registros
+  describe table t_rel lines l_qtdreg.
+  call function 'CONVERSION_EXIT_ALPHA_OUTPUT'
+    exporting
+      input  = l_qtdreg
+    importing
+      output = l_qtdreg.
+  concatenate text-014 l_qtdreg into l_linha
+    separated by space.
+  perform zf_campos_cabecalho using c_s space l_linha.
+
+endform.                    " zf_cabecalho_alv
+*&---------------------------------------------------------------------*
+*&      Form  zf_campos_cabecalho
+*&---------------------------------------------------------------------*
+* Monta campos do cabeçalho do ALV
+*----------------------------------------------------------------------*
+form zf_campos_cabecalho using p_type like w_header-typ
+                               p_key  like w_header-key
+                               p_info like w_header-info.
+
+  clear w_header.
+
+* H = Header, S = Selection, A = Action
+  w_header-typ  = p_type.
+
+* 20 caracteres
+  w_header-key  = p_key.
+
+* 60 caracteres
+  w_header-info = p_info.
+
+  append w_header to t_alv_header.
+  clear  w_header.
+
+endform.                    " zf_campos_cabecalho
+*&---------------------------------------------------------------------*
+*&      Form  zf_user_command
+*&---------------------------------------------------------------------*
+* Controle do comando do usuário no ALV
+*----------------------------------------------------------------------*
+form zf_user_command using p_ucomm    like sy-ucomm
+                           p_selfield type slis_selfield.   "#EC CALLED
+
+  data: l_memoria(18) type c,
+        l_objid like hrp1000-objid.
+
+  case p_ucomm.
+
+* Tratamento do comando Salvar
+    when '&DATA_SAVE'.
+
+      perform: zf_atualiza_ondas_relatorio,
+               zf_associar_funcionarios.
+      p_selfield-refresh = c_x.
+
+* Atualização dos dados do relatório obedecendo os critérios de filtro
+    when 'REFRESH'.
+      perform: zf_libera_memoria,
+               zf_seleciona_dados,
+               zf_monta_tab_rel.
+      p_selfield-refresh = c_x.
+
+* Consulta Subordinados
+    when 'SUBORDINAD'.
+      read table t_rel into w_rel with key sel = c_x.
+      if sy-subrc eq 0.
+        if w_rel-fgestor eq c_s.
+          submit zglrhr0005_busca_subordinados and return
+                                          with p_gestor = w_rel-pernr.
+        else.
+          message i000 display like c_e with text-011.
+        endif.
+      else.
+        message i000 with text-012.
+      endif.
+    when 'MANUT'.
+      l_objid = p_onda.
+      concatenate 'IDONDA' sy-uname into l_memoria.
+      export l_objid to memory id l_memoria.
+      submit zglrhr0004_mant_onda_avl via selection-screen.
+  endcase.
+
+endform.                    "zf_user_command
+*&---------------------------------------------------------------------*
+*&      Form  zf_exibe_alv
+*&---------------------------------------------------------------------*
+* Exibe relatório ALV
+*----------------------------------------------------------------------*
+form zf_exibe_alv.
+
+  w_variant-variant = p_vari.
+
+* Exibe o ALV
+  call function 'REUSE_ALV_GRID_DISPLAY'
+    exporting
+      i_callback_program = v_repid
+      is_layout          = w_alv_layout
+      it_fieldcat        = t_alv_fieldcat[]
+      it_excluding       = t_excluding[]
+      i_default          = c_x
+      i_save             = c_a
+      is_variant         = w_variant
+      it_events          = t_alv_event
+    tables
+      t_outtab           = t_rel
+    exceptions
+      program_error      = 1
+      others             = 2.                               "#EC *
+
+endform.                    " zf_exibe_alv
+*&---------------------------------------------------------------------*
+*&      Form  zf_eventos_alv
+*&---------------------------------------------------------------------*
+* Monta tabela de Eventos do ALV
+*----------------------------------------------------------------------*
+form zf_eventos_alv.
+
+* Preenche eventos
+  clear w_alv_event.
+  w_alv_event-name = slis_ev_top_of_page.
+  w_alv_event-form = 'ZF_TOP_OF_PAGE'.
+  append w_alv_event to t_alv_event.
+
+  clear w_alv_event.
+  w_alv_event-name = slis_ev_user_command.
+  w_alv_event-form = 'ZF_USER_COMMAND'.
+  append w_alv_event to t_alv_event.
+
+  clear w_alv_event.
+  w_alv_event-name = slis_ev_pf_status_set.
+  w_alv_event-form = 'ZF_STATUS'.
+  append w_alv_event to t_alv_event.
+
+endform.                    " zf_eventos_alv
+*&---------------------------------------------------------------------*
+*&      Form  zf_seleciona_dados
+*&---------------------------------------------------------------------*
+* Seleciona Dados
+*----------------------------------------------------------------------*
+form zf_seleciona_dados.
+
+  perform zf_send_gui using text-i01 0 100 0.
+
+  refresh r_bukrs.
+
+* Seleciona empresas
+  select bukrs unidade
+    into table t_empresa_dp
+    from ztbhr_empresa_dp
+   where bukrs   in s_bukrs
+     and unidade in s_empr.
+  if sy-subrc eq 0.
+    clear: r_bukrs.
+    loop at t_empresa_dp into w_empresa_dp.
+
+* Verifica autorização por Empresa
+      authority-check object 'ZO:GLHR001'
+               id 'ACTVT'   field '01'
+               id 'PERSA'   dummy
+               id 'UNIDADE' field w_empresa_dp-empresa.
+      if sy-subrc ne 0.
+        message i000 display like c_e
+                             with text-e12 w_empresa_dp-empresa(40).
+        leave list-processing.
+      endif.
+
+*      authority-check object 'F_BKPF_BUK'
+*               id 'BUKRS' field w_empresa_dp-bukrs
+*               id 'ACTVT' field '01'.
+*      if sy-subrc ne 0.
+*        message i000 display like c_e
+*                             with text-e12 w_empresa_dp-bukrs.
+*        leave list-processing.
+*      endif.
+
+      move: c_sign_i           to r_bukrs-sign,
+            c_option_eq        to r_bukrs-option,
+            w_empresa_dp-bukrs to r_bukrs-low.
+      append r_bukrs.
+      clear: r_bukrs.
+    endloop.
+  else.
+    message i040(zhr02). "Não existem dados para os parametros especif.
+    leave list-processing.
+  endif.
+
+  sort r_bukrs.
+  delete adjacent duplicates from r_bukrs.
+
+  perform zf_send_gui using text-i02 10 100 0.
+
+* Seleciona Funcionários
+* Obs.: A cláusula Where nessa ordem utiliza diversos índices a fim de
+* melhorar a performance da seleção
+  select pernr bukrs werks gsber btrtl
+         orgeh plans stell ename
+    into table t_pa0001
+    from pa0001
+   where pernr in s_func
+     and endda ge sy-datum
+     and begda le sy-datum
+     and bukrs in r_bukrs
+     and gsber in s_gsber
+     and btrtl in s_btrtl
+     and werks in s_werks
+     and orgeh in s_orgeh
+     and stell in s_stell.
+
+  loop at t_pa0001 into w_pa0001.
+    rp-read-infotype w_pa0001-pernr 0000 p0000 sy-datum sy-datum.
+    if sy-subrc ne 0 or p0000-stat2 ne c_stat2_3.
+      delete t_pa0001.
+    else.
+      w_pa0001-orgref = w_pa0001-orgeh.
+      w_pa0001-idref  = w_pa0001-pernr.
+      w_pa0001-perref = w_pa0001-pernr.
+      modify t_pa0001 from w_pa0001.
+    endif.
+  endloop.
+
+  if t_pa0001 is initial.
+    message i040(zhr02). "Não existem dados para os parametros especif.
+    leave list-processing.
+  endif.
+
+  perform zf_send_gui using text-i03 30 100 0.
+
+* Seleciona Grupos Salariais
+  select pernr trfgr
+    into table t_pa0008
+    from pa0008
+     for all entries in t_pa0001
+   where pernr eq t_pa0001-pernr
+     and endda ge sy-datum
+     and begda le sy-datum.
+
+* Se o usuário quiser filtrar por grupo salarial, eliminar funcionários
+* não correspondentes
+  if not s_trfgr[] is initial.
+    loop at t_pa0008 into w_pa0008.
+      if not w_pa0008-trfgr in s_trfgr.
+        delete t_pa0001 where pernr eq w_pa0008-pernr.
+        delete pa0008.
+      endif.
+    endloop.
+  endif.
+
+  if t_pa0001 is initial.
+    message i040(zhr02). "Não existem dados para os parametros especif.
+    leave list-processing.
+  endif.
+
+* Seleciona as ondas que os funcionários já estão participando
+  select otype objid istat begda endda sclas sobid
+    into table t_hrp1001aux
+    from hrp1001
+     for all entries in t_pa0001
+   where otype eq c_otype_1o
+     and plvar eq c_plvar_01
+     and rsign eq c_rsign_b
+     and relat eq c_relat_003
+     and sclas eq c_otype_p
+     and sobid eq t_pa0001-perref.
+  if sy-subrc eq 0.
+    delete t_hrp1001aux where begda gt v_endonda or endda lt v_begonda.
+    delete t_hrp1001aux where istat eq c_istat_5.
+  endif.
+
+  perform zf_send_gui using text-i04 45 100 0.
+
+* Seleciona Pipeline e Família
+  select otype objid istat begda endda sclas sobid
+    into table t_hrp1001
+    from hrp1001
+     for all entries in t_pa0001
+   where otype eq c_otype_s
+     and objid eq t_pa0001-plans
+     and plvar eq c_plvar_01
+     and rsign eq c_rsign_b
+     and relat eq c_relat_007
+     and istat eq c_istat_1
+     and begda le sy-datum
+     and endda ge sy-datum
+     and ( sclas eq c_otype_1p or
+           sclas eq c_otype_1f ).
+
+  loop at t_hrp1001 into w_hrp1001.
+    move w_hrp1001-sobid(8) to w_hrp1001-objref.
+    if not r_pipes[] is initial or not s_fami[] is initial.
+      case w_hrp1001-sclas.
+        when c_otype_1p.
+          if not w_hrp1001-sobid in r_pipes.
+            delete t_pa0001 where plans eq w_hrp1001-objid.
+            delete t_hrp1001.
+            continue.
+          endif.
+        when c_otype_1f.
+          if not w_hrp1001-objref in s_fami.
+            delete t_pa0001 where plans eq w_hrp1001-objid.
+            delete t_hrp1001.
+            continue.
+          endif.
+      endcase.
+    endif.
+    modify t_hrp1001 from w_hrp1001.
+  endloop.
+
+  if t_pa0001 is initial.
+    message i040(zhr02). "Não existem dados para os parametros especif.
+    leave list-processing.
+  endif.
+
+  if not t_hrp1001 is initial.
+* Seleciona descrições dos Pipelines e Famílias
+    select otype objid istat stext
+      into table t_hrp1000
+      from hrp1000
+       for all entries in t_hrp1001
+     where plvar eq c_plvar_01
+       and otype eq t_hrp1001-sclas
+       and objid eq t_hrp1001-objref
+       and istat eq c_istat_1
+       and begda le sy-datum
+       and endda ge sy-datum
+       and langu eq sy-langu.
+  endif.
+
+* Seleciona Registros de Gestores
+  select otype objid istat begda endda sclas sobid
+    into table t_gestor
+    from hrp1001
+     for all entries in t_pa0001
+   where plvar eq c_plvar_01
+     and otype eq c_otype_s
+     and objid eq t_pa0001-plans
+     and rsign eq c_rsign_a
+     and relat eq c_relat_012
+     and istat eq c_istat_1
+     and begda le sy-datum
+     and endda ge sy-datum
+     and sclas eq c_otype_o
+     and sobid eq t_pa0001-orgref.
+
+  perform zf_send_gui using text-i05 60 100 0.
+
+* Seleciona Descrição da Empresa
+  select bukrs butxt
+    into table t_t001
+    from t001
+     for all entries in t_pa0001
+   where bukrs eq t_pa0001-bukrs.
+
+* Seleciona Descrição da Unidade
+  select gsber gtext
+    into table t_tgsbt
+    from tgsbt
+     for all entries in t_pa0001
+   where spras eq sy-langu
+     and gsber eq t_pa0001-gsber.
+
+* Seleciona Descrição da Unidade Organizacional
+  select orgeh orgtx
+    into table t_t527x
+    from t527x
+     for all entries in t_pa0001
+   where sprsl eq sy-langu
+     and orgeh eq t_pa0001-orgeh
+     and endda ge sy-datum.
+
+* Seleciona Descrição da Área de RH
+  select persa name1
+    into table t_t500p
+    from t500p
+     for all entries in t_pa0001
+   where persa eq t_pa0001-werks.
+
+* Seleciona Descrição da Sub-Área de RH
+  select werks btrtl btext
+    into table t_t001p
+    from t001p
+     for all entries in t_pa0001
+   where werks eq t_pa0001-werks
+     and btrtl eq t_pa0001-btrtl.
+
+* Seleciona Descrição do Cargo
+  select stell stltx
+    into table t_t513s
+    from t513s
+     for all entries in t_pa0001
+   where sprsl eq sy-langu
+     and stell eq t_pa0001-stell
+     and endda ge sy-datum.
+
+* Seleciona E-Mail do Funcionário
+  select pernr usrid_long
+    into table t_pa0105
+    from pa0105
+     for all entries in t_pa0001
+   where pernr eq t_pa0001-pernr
+     and subty eq c_subty_0010
+     and endda ge sy-datum
+     and begda le sy-datum.
+
+  perform zf_send_gui using text-i05 70 100 0.
+
+  move: c_sign_i     to r_codparam-sign,
+        c_option_eq  to r_codparam-option,
+        c_param_0009 to r_codparam-low.
+  append r_codparam.
+  move: c_param_0010 to r_codparam-low.
+  append r_codparam.
+
+* Seleciona IDs de avaliação
+  select valor
+    into table t_aval
+    from ztbhr_param_aval
+   where codparam in r_codparam.
+
+  check sy-subrc eq 0.
+  sort t_aval by valor.
+  delete adjacent duplicates from t_aval.
+  loop at t_aval into w_aval.
+    move: c_sign_i     to r_elem_id-sign,
+          c_option_eq  to r_elem_id-option,
+          w_aval-valor to r_elem_id-low.
+    append r_elem_id.
+    clear: r_elem_id.
+  endloop.
+
+* Seleciona Avaliações feitas pelos funcionários
+  select appraisal_id id
+    into table t_appee
+    from hrhap_appee
+     for all entries in t_pa0001
+   where plan_version eq c_plvar_01
+     and type         eq c_otype_p
+     and id           eq t_pa0001-idref.
+
+  check sy-subrc eq 0.
+
+* Seleciona modelos de avaliação
+  select appraisal_id row_iid element_id combined_key
+    into table t_basic
+    from hrhap_basic
+     for all entries in t_appee
+   where plan_version eq c_plvar_01
+     and appraisal_id eq t_appee-appraisal_id
+     and element_type eq c_otype_va
+     and element_id   in r_elem_id.
+
+  check sy-subrc eq 0.
+
+* Seleciona datas das avaliações
+  select appraisal_id change_date
+    into table t_hrhap
+    from hrhap
+     for all entries in t_basic
+   where plan_version eq c_plvar_01
+     and appraisal_id eq t_basic-appraisal_id
+     and ap_status    eq c_ap_status_5.
+
+  sort t_hrhap by appraisal_id ascending change_date descending.
+  delete adjacent duplicates from t_hrhap comparing appraisal_id.
+  sort t_appee by appraisal_id.
+
+  loop at t_hrhap into w_hrhap.
+    read table t_appee into w_appee
+                       with key appraisal_id = w_hrhap-appraisal_id
+                                binary search.
+    if sy-subrc eq 0.
+      w_hrhap-pernr_ref = w_appee-id.
+      modify t_hrhap from w_hrhap.
+    else.
+      delete t_hrhap.
+    endif.
+  endloop.
+
+endform.                    " zf_seleciona_dados
+*&---------------------------------------------------------------------*
+*&      Form  zf_monta_tab_rel
+*&---------------------------------------------------------------------*
+* Monta tabela do Relatório
+*----------------------------------------------------------------------*
+form zf_monta_tab_rel.
+
+  data: lt_gestor type table of zsthr_aval,
+        lw_gestor type zsthr_aval.
+
+  check not t_pa0001 is initial.
+
+  perform zf_send_gui using text-i06 75 100 0.
+
+  refresh t_rel.
+
+  sort: t_empresa_dp by bukrs,
+        t_pa0008     by pernr,
+        t_pa0105     by pernr,
+        t_hrp1000    by otype objid,
+        t_hrp1001    by otype objid sclas,
+        t_t001       by bukrs,
+        t_tgsbt      by gsber,
+        t_t527x      by orgeh,
+        t_t500p      by persa,
+        t_t001p      by werks btrtl,
+        t_t513s      by stell,
+        t_gestor     by otype objid sobid,
+        t_hrhap      by pernr_ref,
+        t_hrp1001aux by otype sclas sobid.
+
+  loop at t_pa0001 into w_pa0001.
+    clear: w_rel, w_pa0008, w_pa0105, w_t001, w_tgsbt, w_t527x, w_t500p,
+           w_t001p, w_t513s, w_hrp1001, w_hrp1000, w_hrhap.
+
+* Recupera empresa
+    read table t_empresa_dp into w_empresa_dp
+                        with key bukrs = w_pa0001-bukrs
+                                 binary search.
+    if sy-subrc ne 0.
+      continue.
+    endif.
+
+* Recupera Grupo Salarial
+    read table t_pa0008 into w_pa0008
+                    with key pernr = w_pa0001-pernr
+                             binary search.
+    if sy-subrc ne 0 and not s_trfgr[] is initial.
+      continue.
+    endif.
+
+* Recupera Descrição da Empresa
+    read table t_t001 into w_t001
+                  with key bukrs = w_pa0001-bukrs
+                           binary search.
+
+* Recupera Descrição da Unidade
+    read table t_tgsbt into w_tgsbt
+                   with key gsber = w_pa0001-gsber
+                            binary search.
+
+* Recupera Descrição da Unidade Organizacional
+    read table t_t527x into w_t527x
+                   with key orgeh = w_pa0001-orgeh
+                            binary search.
+
+* Recupera Descrição da Área de RH
+    read table t_t500p into w_t500p
+                   with key persa = w_pa0001-werks
+                            binary search.
+
+* Recupera Descrição da Sub-Área de RH
+    read table t_t001p into w_t001p
+                   with key werks = w_pa0001-werks
+                            btrtl = w_pa0001-btrtl
+                            binary search.
+
+* Recupera Descrição do Cargo
+    read table t_t513s into w_t513s
+                   with key stell = w_pa0001-stell
+                            binary search.
+
+* Recupera Pipeline
+    read table t_hrp1001 into w_hrp1001
+                     with key otype = c_otype_s
+                              objid = w_pa0001-plans
+                              sclas = c_otype_1p
+                              binary search.
+    if sy-subrc eq 0.
+      move: w_hrp1001-objref to w_rel-pipe,
+            w_hrp1001-begda  to w_rel-dt_ini_pipe.
+      read table t_hrp1000 into w_hrp1000
+                       with key otype = c_otype_1p
+                                objid = w_hrp1001-objref
+                                binary search.
+      if sy-subrc eq 0.
+        move: w_hrp1000-stext to w_rel-desc_pipe.
+      endif.
+    elseif not s_pipe[] is initial.
+      continue.
+    else.
+      move: w_hrp1001-objref to w_rel-pipe,
+            text-001         to w_rel-desc_pipe.
+    endif.
+
+* Recupera Família
+    read table t_hrp1001 into w_hrp1001
+                     with key otype = c_otype_s
+                              objid = w_pa0001-plans
+                              sclas = c_otype_1f
+                              binary search.
+    if sy-subrc eq 0.
+      move: w_hrp1001-objref to w_rel-fami.
+      read table t_hrp1000 into w_hrp1000
+                       with key otype = c_otype_1f
+                                objid = w_hrp1001-objref
+                                binary search.
+      if sy-subrc eq 0.
+        move: w_hrp1000-stext to w_rel-desc_fami.
+      endif.
+    elseif not s_fami[] is initial.
+      continue.
+    else.
+      move: w_hrp1001-objref to w_rel-fami,
+            text-002         to w_rel-desc_fami.
+    endif.
+
+* Recupera E-Mail do funcionário
+    read table t_pa0105 into w_pa0105
+                    with key pernr = w_pa0001-pernr
+                             binary search.
+
+* Recupera Data de início no cargo e data de admissão
+    perform zf_datas using w_pa0001-pernr
+                  changing w_rel-dt_ini_cargo
+                           w_rel-dt_admissao.
+
+* Verifica se funcionário é Gestor ou não
+    read table t_gestor with key otype = c_otype_s
+                                 objid = w_pa0001-plans
+                                 sobid = w_pa0001-orgref
+                                 binary search
+                                 transporting no fields.
+    if sy-subrc eq 0.
+      move: c_s to w_rel-fgestor.
+    endif.
+
+* Recupera data da última avaliação
+    read table t_hrhap into w_hrhap
+                       with key pernr_ref = w_pa0001-pernr
+                       binary search.
+
+* verifica se o funcionário já pertence a outra onda neste período
+    read table t_hrp1001aux into w_hrp1001
+                            with key otype = c_otype_1o
+                                     sclas = c_otype_p
+                                     sobid = w_pa0001-perref
+                                     binary search.
+    if sy-subrc eq 0.
+      call function 'CONVERSION_EXIT_ALPHA_OUTPUT'
+        exporting
+          input  = w_hrp1001-objid
+        importing
+          output = w_hrp1001-objid.
+      concatenate text-013 w_hrp1001-objid into w_rel-mensagem
+        separated by space.
+    endif.
+
+* Move dados para tabela do relatório
+    move: w_pa0001-pernr       to w_rel-pernr,
+          w_empresa_dp-empresa to w_rel-empresa,
+          w_pa0001-bukrs       to w_rel-bukrs,
+          w_t001-butxt         to w_rel-butxt,
+          w_pa0001-gsber       to w_rel-gsber,
+          w_tgsbt-gtext        to w_rel-gtext,
+          w_pa0001-orgeh       to w_rel-orgeh,
+          w_t527x-orgtx        to w_rel-orgtx,
+          w_pa0001-werks       to w_rel-werks,
+          w_t500p-name1        to w_rel-name1,
+          w_pa0001-btrtl       to w_rel-btrtl,
+          w_t001p-btext        to w_rel-btext,
+          w_pa0001-ename       to w_rel-ename,
+          w_pa0001-stell       to w_rel-stell,
+          w_t513s-stltx        to w_rel-stltx,
+          w_pa0001-plans       to w_rel-plans,
+          w_pa0008-trfgr       to w_rel-trfgr,
+          w_pa0105-usrid_long  to w_rel-email,
+          w_hrhap-change_date  to w_rel-dt_ult_aval,
+          w_pa0001-pernr       to w_rel-perref.
+    translate w_rel-email to upper case.                 "#EC TRANSLANG
+    append w_rel to t_rel.
+  endloop.
+
+  perform zf_send_gui using text-i06 85 100 0.
+
+  if not s_tvoto[] is initial.
+    delete t_rel where not dt_admissao in s_tvoto.
+  endif.
+
+  if not s_tcarg[] is initial.
+    delete t_rel where not dt_ini_cargo in s_tcarg.
+  endif.
+
+  if not s_uaval[] is initial.
+    delete t_rel where not dt_ult_aval in s_uaval.
+  endif.
+
+  perform zf_dt_ini_pipeline.
+
+  if not s_tpipe[] is initial.
+    delete t_rel where not dt_ini_pipe in s_tpipe.
+  endif.
+
+* Busca Gestor de cada funcionário
+  loop at t_rel into w_rel.
+    refresh: lt_gestor.
+    call function 'ZFHR_SUPERIOR_SUBORDINADO'
+      exporting
+        pernr     = w_rel-pernr
+        avaliador = space
+        avaliado  = c_x
+      tables
+        saida     = lt_gestor.
+    read table lt_gestor into lw_gestor index 1.
+    if sy-subrc eq 0.
+      move: lw_gestor-id       to w_rel-gestor,
+            lw_gestor-nome(40) to w_rel-nome_gestor,
+            lw_gestor-email    to w_rel-email_gestor.
+      modify t_rel from w_rel.
+    endif.
+  endloop.
+  if not s_gestor[] is initial.
+    delete t_rel where not gestor in s_gestor.
+  endif.
+
+  perform zf_send_gui using text-i06 100 100 0.
+
+endform.                    " zf_monta_tab_rel
+*&---------------------------------------------------------------------*
+*&      Form  zf_send_gui
+*&---------------------------------------------------------------------*
+* Envia mensagem ao usuário na barra de mensagens
+*----------------------------------------------------------------------*
+form zf_send_gui using value(p_text)      type any
+                       value(p_atual)     type any
+                       value(p_total)     type any
+                       value(p_intervalo) type any.
+
+  data: l_resto       type i,
+        l_porcentagem type i,
+        l_perc_txt(4) type c,
+        l_text(132)   type c.
+
+* Verifica se o texto está vazio e se é processo background
+  check p_text ne space and sy-batch eq space.
+
+* Verifica se total é maior que zero para calcular a porcentagem
+  if p_total gt 0.
+    l_porcentagem = ( p_atual * 100 ) / p_total.
+    if p_intervalo ne 0.
+      l_resto = l_porcentagem mod p_intervalo.
+      check l_resto eq 0.
+    endif.
+    l_perc_txt = l_porcentagem.
+    concatenate l_perc_txt '%' into l_perc_txt.
+  endif.
+
+  if l_porcentagem is initial.
+    l_text = p_text.
+  else.
+    concatenate l_perc_txt p_text
+                into l_text
+                separated by space.
+  endif.
+
+* Chama função
+  call function 'SAPGUI_PROGRESS_INDICATOR'
+    exporting
+      percentage = l_porcentagem
+      text       = l_text.
+
+endform.                    " zf_send_gui
+*&---------------------------------------------------------------------*
+*&      Form  zf_datas
+*&---------------------------------------------------------------------*
+* Recupera data de início do funcionário no cargo
+*----------------------------------------------------------------------*
+form zf_datas using p_pernr        like pa0001-pernr
+           changing p_dt_ini_cargo like pa0001-begda
+                    p_dt_admissao  like pa0001-begda.
+
+  data: lt_aux_p0001 type table of y_aux_pa0001,
+        w_aux_p0001  type y_aux_pa0001,
+        l_begda      like pa0001-begda.
+
+  clear: p0001, lt_aux_p0001.
+  refresh: p0001, lt_aux_p0001.
+
+* Efetua leitura dos dados de Medidas do funcionário
+  rp-read-infotype p_pernr 0001 p0001 c_low_date c_high_date.
+
+* Verifica retorno
+  if sy-subrc ne 0.
+    clear: p_dt_ini_cargo.
+  endif.
+
+* Leitura da data da última Alteração de Cargo
+  sort p0001 by endda descending begda descending.
+  loop at p0001.
+    w_aux_p0001-stell = p0001-stell.
+    w_aux_p0001-begda = p0001-begda.
+    w_aux_p0001-endda = p0001-endda.
+    w_aux_p0001-aedtm = p0001-aedtm.
+    append w_aux_p0001 to lt_aux_p0001.
+  endloop.
+  clear: l_begda.
+  loop at lt_aux_p0001 into w_aux_p0001.
+    l_begda = w_aux_p0001-begda.
+    at end of stell.
+      exit.
+    endat.
+  endloop.
+  if not l_begda is initial.
+    move: l_begda to p_dt_ini_cargo.
+  endif.
+
+* Leitura da data de admissão
+  clear p0001.
+  sort p0001 by begda ascending endda ascending.
+  read table p0001 index 1.
+  if not p0001-begda is initial.
+    p_dt_admissao = p0001-begda.
+  endif.
+
+endform.                    " zf_datas
+*&---------------------------------------------------------------------*
+*&      Form  zf_dt_ini_pipeline
+*&---------------------------------------------------------------------*
+* Busca data de início do pipeline para cada funcionário do relatório
+*----------------------------------------------------------------------*
+form zf_dt_ini_pipeline.
+
+  data: lt_rel_aux type table of y_rel.
+
+  data: begin of lt_pa0001 occurs 0,
+          pernr like pa0001-pernr,
+          endda like pa0001-endda,
+          begda like pa0001-begda,
+          plans like pa0001-plans,
+        end of lt_pa0001,
+
+        begin of lt_hrp1001 occurs 0,
+          objid like hrp1001-objid,
+          begda like hrp1001-begda,
+          endda like hrp1001-endda,
+          sobid like hrp1001-sobid,
+        end of lt_hrp1001.
+
+  data: l_begpipe like hrp1001-begda,
+        l_begpos  like pa0001-begda.
+
+  move: t_rel to lt_rel_aux.
+  delete lt_rel_aux where pipe is initial.
+
+  check not lt_rel_aux is initial.
+
+* Seleciona todas as posições dos funcionários do relatório
+  select pernr endda begda plans
+    into table lt_pa0001
+    from pa0001
+     for all entries in lt_rel_aux
+   where pernr eq lt_rel_aux-pernr.
+
+  delete lt_pa0001 where begda gt sy-datum.
+
+  check not lt_pa0001[] is initial.
+
+* Seleciona todos os pipelines de todas as posições
+  select objid begda endda sobid
+    into table lt_hrp1001
+    from hrp1001
+     for all entries in lt_pa0001
+   where otype eq c_otype_s
+     and objid eq lt_pa0001-plans
+     and plvar eq c_plvar_01
+     and rsign eq c_rsign_b
+     and relat eq c_relat_007
+     and istat eq c_istat_1
+     and sclas eq c_otype_1p.
+
+  delete lt_hrp1001 where begda gt sy-datum.
+
+  sort: lt_pa0001  by pernr endda descending,
+        lt_hrp1001 by objid begda descending sobid.
+
+  loop at t_rel into w_rel where not pipe is initial.
+    clear: l_begpipe, l_begpos.
+    loop at lt_pa0001 where pernr eq w_rel-pernr.
+      read table lt_hrp1001 with key objid = lt_pa0001-plans.
+      if sy-subrc eq 0.
+        if l_begpipe is initial.
+          l_begpos  = lt_pa0001-begda.
+          l_begpipe = lt_hrp1001-begda.
+        elseif w_rel-pipe eq lt_hrp1001-sobid(8).
+          l_begpos  = lt_pa0001-begda.
+          l_begpipe = lt_hrp1001-begda.
+        elseif w_rel-pipe ne lt_hrp1001-sobid(8).
+          exit.
+        endif.
+      else.
+        exit.
+      endif.
+    endloop.
+    if l_begpipe lt l_begpos.
+      w_rel-dt_ini_pipe = l_begpos.
+    else.
+      w_rel-dt_ini_pipe = l_begpipe.
+    endif.
+    modify t_rel from w_rel.
+  endloop.
+
+endform.                    " zf_dt_ini_pipeline
+*&---------------------------------------------------------------------*
+*&      Form  zf_associar_funcionarios
+*&---------------------------------------------------------------------*
+* Associa funcionários do relatório a onda
+*----------------------------------------------------------------------*
+form zf_associar_funcionarios.
+
+  data: l_linhas   type i,
+        l_resposta type c,
+        l_user     like sy-uname.
+
+  data: lt_innnn type table of p1001 with header line.
+
+  if t_rel is initial.
+    message i000 display like c_e with text-e07 text-e16.
+    exit.
+  endif.
+
+* Pede confirmação
+  call function 'POPUP_TO_CONFIRM'
+    exporting
+      titlebar              = text-007
+      text_question         = text-008
+      text_button_1         = text-009
+      icon_button_1         = 'ICON_SYSTEM_OKAY'
+      text_button_2         = text-010
+      icon_button_2         = 'ICON_SYSTEM_CANCEL'
+      default_button        = '1'
+      display_cancel_button = space
+    importing
+      answer                = l_resposta
+    exceptions
+      text_not_found        = 1
+      others                = 2.
+
+  check l_resposta eq '1'.
+
+* Bloqueia Onda
+  clear: l_user.
+  call function 'HR_ENQUEUE_OBJECT'
+    exporting
+      plvar            = c_plvar_01
+      otype            = c_otype_1o
+      objid            = p_onda
+    importing
+      lock_user        = l_user
+    exceptions
+      enqueue_failed   = 1
+      objid_is_initial = 2
+      illegal_otype    = 3
+      internal_error   = 4
+      others           = 5.
+  if sy-subrc ne 0.
+    message i000 display like c_e with text-e15 l_user.
+    exit.
+  endif.
+
+  refresh: t_log.
+  describe table t_rel lines l_linhas.
+  if l_linhas gt 0.
+    perform zf_send_gui using text-004 0 0 0.
+    loop at t_rel into w_rel.
+      if w_rel-mensagem is initial.
+        clear lt_innnn.
+        lt_innnn-mandt = sy-mandt.
+        lt_innnn-otype = c_otype_1o.
+        lt_innnn-objid = p_onda.
+        lt_innnn-plvar = c_plvar_01.
+        lt_innnn-rsign = c_rsign_b.
+        lt_innnn-relat = c_relat_003.
+        lt_innnn-istat = c_istat_2.
+        lt_innnn-begda = v_begonda.
+        lt_innnn-endda = v_endonda.
+        lt_innnn-infty = c_infty_1001.
+        lt_innnn-sclas = c_otype_p.
+        lt_innnn-sobid = w_rel-pernr.
+        concatenate c_otype_p w_rel-pernr into lt_innnn-varyf
+          separated by space.
+        append lt_innnn.
+      else.
+        call function 'CONVERSION_EXIT_ALPHA_OUTPUT'
+          exporting
+            input  = p_onda
+          importing
+            output = p_onda.
+* Acrescentar mensagem ao log caso não seja da mesma onda
+        if w_rel-mensagem ns p_onda.
+          concatenate w_rel-pernr c_hifen w_rel-mensagem
+                 into w_log-linha separated by space.
+          append w_log to t_log.
+          clear: w_log.
+        endif.
+        unpack p_onda to p_onda.
+      endif.
+    endloop.
+    if lt_innnn[] is initial.
+      message i000 display like c_e with text-e10 text-e11.
+    else.
+* Insere os funcionários na onda
+      call function 'RH_INSERT_INFTY'
+        exporting
+          fcode               = 'INSE'
+          vtask               = 'D'
+        tables
+          innnn               = lt_innnn
+        exceptions
+          no_authorization    = 1
+          error_during_insert = 2
+          repid_form_initial  = 3
+          corr_exit           = 4
+          begda_greater_endda = 5
+          others              = 6.
+      if sy-subrc eq 0.
+        message i000 display like c_s with text-006 p_onda.
+* Se algum funcionário não foi incluído, exibir log
+        if not t_log is initial.
+          call screen 9000 starting at 20 05 ending at 90 17.
+        endif.
+        clear w_rel.
+        call function 'CONVERSION_EXIT_ALPHA_OUTPUT'
+          exporting
+            input  = p_onda
+          importing
+            output = p_onda.
+        concatenate text-013 p_onda into w_rel-mensagem
+          separated by space.
+        unpack p_onda to p_onda.
+        modify t_rel from w_rel transporting mensagem
+                    where mensagem is initial.
+      else.
+        case sy-subrc.
+          when 1.
+            message i000 display like c_e with text-e07 text-e08.
+          when 5.
+            message i000 display like c_e with text-e07 text-e09.
+          when others.
+            message i000 display like c_e with text-e07.
+        endcase.
+      endif.
+    endif.
+  endif.
+
+* Desbloqueia Onda
+  call function 'HR_DEQUEUE_OBJECT'
+    exporting
+      plvar            = c_plvar_01
+      otype            = c_otype_1o
+      objid            = p_onda
+    exceptions
+      illegal_otype    = 1
+      objid_is_initial = 2
+      internal_error   = 3
+      others           = 4.
+
+endform.                    " zf_associar_funcionarios
+*&---------------------------------------------------------------------*
+*&      Form  zf_libera_memoria
+*&---------------------------------------------------------------------*
+* Libera memória utilizada pelo programa
+*----------------------------------------------------------------------*
+form zf_libera_memoria.
+
+ free: t_mcode_empresa, t_mcode_grupo, t_empresa_dp, t_pa0001, t_pa0008,
+       t_pa0105, t_hrp1000, t_hrp1001, t_hrp1001aux,
+       t_gestor, t_t001, t_tgsbt, t_t527x, t_t500p, t_t001p, t_t513s,
+       t_aval, t_appee, t_basic, t_hrhap, t_rel.
+
+  free: t_alv_header, t_alv_fieldcat, t_alv_sort, t_alv_event,
+        t_excluding.
+
+endform.                    " zf_libera_memoria
+*&---------------------------------------------------------------------*
+*&      Form  zf_valida_campos
+*&---------------------------------------------------------------------*
+* Valida campos dos parâmetros de seleção
+*----------------------------------------------------------------------*
+form zf_valida_campos.
+
+  data: l_sobid   like hrp1001-sobid,
+        l_zzuname like hrp9501-zzuname.
+
+  data: begin of lt_pponda occurs 0,
+          sobid like hrp1001-sobid,
+        end of lt_pponda,
+
+        begin of lt_ppsel occurs 0,
+          objid like hrp1001-objid,
+        end of lt_ppsel.
+
+* Recupera dados da onda no idioma de login
+  select istat begda endda stext up to 1 rows
+    into (v_istat, v_begonda, v_endonda, v_desc_onda)
+    from hrp1000
+   where plvar eq c_plvar_01
+     and otype eq c_otype_1o
+     and objid eq p_onda
+     and istat in r_istat
+     and langu eq sy-langu.
+  endselect.
+
+* Caso não encontre
+  if sy-subrc ne 0.
+* Recupera dados da onda no idioma que houver registro
+    select istat begda endda stext up to 1 rows
+      into (v_istat, v_begonda, v_endonda, v_desc_onda)
+      from hrp1000
+     where plvar eq c_plvar_01
+       and otype eq c_otype_1o
+       and objid eq p_onda
+       and istat in r_istat.
+    endselect.
+
+    if sy-subrc ne 0.
+      message e000 with text-e01 text-e02.
+    endif.
+  endif.
+
+* Verifica se é o usuário que criou a onda
+  select zzuname
+    into l_zzuname
+    from hrp9501
+   where plvar eq c_plvar_01
+     and otype eq c_otype_1o
+     and objid eq p_onda
+     and istat in r_istat
+     and begda eq v_begonda
+     and endda eq v_endonda.
+  endselect.
+
+  if sy-subrc ne 0 or l_zzuname ne sy-uname.
+    message e000 with text-e13 l_zzuname text-e14 p_onda.
+  endif.
+
+* Recupera pipelines da onda
+  select sobid
+    into table lt_pponda
+    from hrp1001
+   where otype eq c_otype_1o
+     and objid eq p_onda
+     and plvar eq c_plvar_01
+     and rsign eq c_rsign_b
+     and relat eq c_relat_003
+     and istat in r_istat
+     and sclas eq c_otype_1p.
+  if sy-subrc eq 0.
+    loop at lt_pponda.
+      clear: r_pipes.
+      move: c_sign_i        to r_pipes-sign,
+            c_option_eq     to r_pipes-option,
+            lt_pponda-sobid to r_pipes-low.
+      append r_pipes.
+    endloop.
+    clear r_pipes-low.
+    append r_pipes.
+  endif.
+
+* Substitui comparações em branco pelos pipelines da onda
+  if sy-ucomm eq 'ONLI'.
+    read table s_pipe with key sign   = c_sign_i
+                               option = c_option_ne
+                               low    = '00000000'.
+    if sy-subrc eq 0.
+      delete s_pipe index sy-tabix.
+      loop at r_pipes.
+        clear s_pipe.
+        s_pipe-sign   = r_pipes-sign.
+        s_pipe-option = r_pipes-option.
+        s_pipe-low    = r_pipes-low.
+        append s_pipe.
+      endloop.
+    endif.
+    read table s_pipe with key sign   = c_sign_e
+                               option = c_option_eq
+                               low    = '00000000'.
+    if sy-subrc eq 0.
+      delete s_pipe index sy-tabix.
+      loop at r_pipes.
+        clear s_pipe.
+        s_pipe-sign   = r_pipes-sign.
+        s_pipe-option = r_pipes-option.
+        s_pipe-low    = r_pipes-low.
+        append s_pipe.
+      endloop.
+    endif.
+    sort s_pipe.
+    delete adjacent duplicates from s_pipe comparing all fields.
+
+    if not s_pipe[] is initial.
+* Recupera pipelines do parametros de seleção
+      select objid
+        into table lt_ppsel
+        from hrp1000
+       where plvar eq c_plvar_01
+         and otype eq c_otype_1p
+         and objid in s_pipe
+         and istat eq c_istat_1
+         and begda le sy-datum
+         and endda ge sy-datum.
+      if sy-subrc ne 0.
+        message e000 with text-e05. "Pipeline não existente
+      endif.
+      sort lt_ppsel.
+      delete adjacent duplicates from lt_ppsel.
+* Confere se os pipelines informados podem ser associados a onda
+      loop at lt_ppsel.
+        l_sobid = lt_ppsel-objid.
+        if not l_sobid in r_pipes.
+          call function 'CONVERSION_EXIT_ALPHA_OUTPUT'
+            exporting
+              input  = l_sobid
+            importing
+              output = l_sobid.
+* Emite mensagem de erro e interrompe a seleção
+          message e000 with text-e03 l_sobid text-e04.
+        endif.
+      endloop.
+* Substitui o range da onda, pelo que o usuário deseja exibir
+      refresh r_pipes.
+      loop at lt_ppsel.
+        clear r_pipes.
+        move: c_sign_i       to r_pipes-sign,
+              c_option_eq    to r_pipes-option,
+              lt_ppsel-objid to r_pipes-low.
+        append r_pipes.
+      endloop.
+    endif.
+  endif.
+
+endform.                    " zf_valida_campos
+*&---------------------------------------------------------------------*
+*&      Module  zm_status_9000  OUTPUT
+*&---------------------------------------------------------------------*
+* Controle de PBO da tela 9000
+*----------------------------------------------------------------------*
+module zm_status_9000 output.
+
+  data: l_line like htmlline-tdline.
+
+  set titlebar 'T1'.
+
+  set pf-status 'ZGHR_STATUS9000'.
+
+* Apenas carregará o container uma única vez
+  check v_flag_9000 is initial.
+
+* Instancia objeto Custom Container
+  create object v_custom_container
+    exporting
+         container_name              = 'CC_TEXT'
+    exceptions
+         cntl_error                  = 1
+         cntl_system_error           = 2
+         create_error                = 3
+         lifetime_error              = 4
+         lifetime_dynpro_dynpro_link = 5.
+
+* Instancia objeto HTML Viewer
+  create object v_html_viewer
+     exporting
+          parent             = v_custom_container
+     exceptions
+          cntl_error         = 1
+          cntl_install_error = 2
+          dp_install_error   = 3
+          dp_error           = 4.
+
+* Inicia código HTML
+  init_html.
+
+* Inclui as linhas de informações
+  append_html '<FONT FACE="Verdana" SIZE="2">'.
+  append_html '<P>'.
+  loop at t_log into w_log.
+    concatenate w_log-linha '<BR>' into l_line.
+    append_html l_line.
+  endloop.
+  append_html '</P>'.
+  append_html '</FONT>'.
+
+* Finaliza código HTML
+  end_html.
+
+* Carrega dados do HTML
+  clear: v_url.
+  call method v_html_viewer->load_data
+    importing
+      assigned_url = v_url
+    changing
+      data_table   = t_html[]
+    exceptions
+      others       = 1.
+
+* Mostra dados no container
+  call method v_html_viewer->show_data
+    exporting
+      url    = v_url
+    exceptions
+      others = 1.
+
+  move: c_x to v_flag_9000.
+
+endmodule.                 " zm_status_9000  OUTPUT
+*&---------------------------------------------------------------------*
+*&      Module  zm_user_command_9000  INPUT
+*&---------------------------------------------------------------------*
+* Controle da Ação do usuário na tela 9000
+*----------------------------------------------------------------------*
+module zm_user_command_9000 input.
+
+* Limpa a memória usada pelo container
+  call method v_custom_container->free.
+  clear: v_flag_9000.
+
+  set screen 0.
+  leave screen.
+
+endmodule.                 " zm_user_command_9000  INPUT
+*&---------------------------------------------------------------------*
+*&      Form  zf_atualiza_ondas_relatorio
+*&---------------------------------------------------------------------*
+* Atualiza ondas que os funcionários exibidos no relatório estão
+* participando atualmente. Serve para garantir que dois usuários não
+* estão tentando associar funcionários ao mesmo tempo
+*----------------------------------------------------------------------*
+form zf_atualiza_ondas_relatorio.
+
+  check not t_rel is initial.
+
+* Seleciona as ondas que os funcionários já estão participando
+  select otype objid istat begda endda sclas sobid
+    appending table t_hrp1001aux
+    from hrp1001
+     for all entries in t_rel
+   where otype eq c_otype_1o
+     and plvar eq c_plvar_01
+     and rsign eq c_rsign_b
+     and relat eq c_relat_003
+     and sclas eq c_otype_p
+     and sobid eq t_rel-perref.
+  if sy-subrc eq 0.
+    sort t_hrp1001aux.
+    delete adjacent duplicates from t_hrp1001aux.
+    delete t_hrp1001aux where begda gt v_endonda or endda lt v_begonda.
+    delete t_hrp1001aux where istat eq c_istat_5.
+    if not t_hrp1001aux is initial.
+      sort t_hrp1001aux by otype sclas sobid.
+      loop at t_rel into w_rel.
+* verifica se o funcionário já pertence a outra onda neste período
+        read table t_hrp1001aux into w_hrp1001
+                                with key otype = c_otype_1o
+                                         sclas = c_otype_p
+                                         sobid = w_rel-perref
+                                         binary search.
+        if sy-subrc eq 0.
+          call function 'CONVERSION_EXIT_ALPHA_OUTPUT'
+            exporting
+              input  = w_hrp1001-objid
+            importing
+              output = w_hrp1001-objid.
+          concatenate text-013 w_hrp1001-objid into w_rel-mensagem
+            separated by space.
+          modify t_rel from w_rel.
+        endif.
+      endloop.
+    endif.
+  endif.
+
+endform.                    " zf_atualiza_ondas_relatorio
+
+*---------------------------------------------------------------------
+* GUI Texts
+*---------------------------------------------------------------------
+* T1 --> Log de associação de funcionários
+
+*---------------------------------------------------------------------
+* Text Elements
+*---------------------------------------------------------------------
+* 001 Funcionário sem Pipeline cadastrado
+* 002 Funcionário sem Família cadastrada
+* 003 Onda de Avaliação:
+* 004 Associando funcionários à onda. Por favor aguarde.
+* 005 Erros ao associar funcionários à onda
+* 006 Funcionários associados com sucesso à onda:
+* 007 Confirmação
+* 008 Tem certeza que deseja associar todos os funcionários listados à onda informada?
+* 009 Sim
+* 010 Não
+* 011 Funcionário não é Gestor
+* 012 É necessário selecionar uma linha.
+* 013 Funcionário já pertence à onda:
+* 014 Funcionários selecionados:
+* 015 <> Referência:
+* 016 Pipeline(s):
+* 017 Início:
+* 018 Fim:
+* 019 Nome:
+* 020 Status:
+* 021 Ativo
+* 022 Escalonado
+* 023 Pré-Aprovado
+* 024 Aprovado
+* 025 Rejeitado
+* E01 Onda não cadastrada ou
+* E02 status diferente de escalonado ou pré-aprovado.
+* E03 Pipeline
+* E04 não permitido na onda
+* E05 Pipeline(s) não existente(s).
+* E06 Não existem dados para os parâmetros especificados
+* E07 Erro ao associar funcionários à onda.
+* E08 Sem autorização.
+* E09 Data final menor que data inicial.
+* E10 Nenhum funcionário foi incluído. Todos os
+* E11 funcionários listados já pertencem a alguma onda.
+* E12 Sem autorização para a empresa
+* E13 Apenas o usuário
+* E14 pode associonar funcionários à onda
+* E15 Onda está bloqueada pelo usuário
+* E16 Relatório em branco.
+* I01 Selecionando Empresas
+* I02 Selecionando Funcionários
+* I03 Selecionando Grupos Salariais
+* I04 Selecionando Pipeline e Família
+* I05 Selecionando Descrições
+* I06 Gerando tabela do relatório
+* T01 Onda de Avaliação
+* T02 Filtros de Funcionários
+* T03 Empresa
+* T04 Descrição da Empresa
+* T05 Unidade
+* T06 Unidade Organizacional
+* T07 Área de RH
+* T08 Sub-Área de RH
+* T09 Família
+* T10 Nome
+* T11 Cargo
+* T12 Pipeline
+* T13 Data da Última Avaliação
+* T14 Grupo Salarial
+* T15 Data de Admissão
+* T16 Gestor
+* T17 E-mail Funcionário
+* T18 Data de início no cargo
+* T19 Data de início no pipeline
+* T20 Nº Pessoal
+* T21 Variante de exibição
+* T22 Gestor (Sim/Não)
+* T23 Mensagem
+* T24 E-Mail do Gestor
+* T25 Cód. Empresa
+* T26 Cód. Unidade
+* T27 Cód. Unidade Org.
+* T28 Cód. Área RH
+* T29 Cód. Sub-Área RH
+* T30 Cód. Pipeline
+* T31 Cód. Família
+* T32 Cód. Cargo
+* T33 Cód. Posição
+
+
+*---------------------------------------------------------------------
+* Selection Texts
+*---------------------------------------------------------------------
+* P_ONDA         Onda de Avaliação
+* P_VARI         Layout
+* S_BTRTL         Sub-área de RH
+* S_BUKRS         Descrição da Empresa
+* S_EMPR         Empresa
+* S_FAMI         Família
+* S_FUNC         Nº Pessoal
+* S_GESTOR         Gestor
+* S_GSBER         Unidade
+* S_ORGEH         Unidade Organizacional
+* S_PIPE         Pipeline
+* S_STELL         Cargo
+* S_TCARG         Data de Início no Cargo
+* S_TPIPE         Data de Início no Pipeline
+* S_TRFGR         Grupo Salarial
+* S_TVOTO         Data de Admissão
+* S_UAVAL         Data da Última Avaliação
+* S_WERKS         Área de RH
+
+
+*---------------------------------------------------------------------
+* Messages
+*---------------------------------------------------------------------
+*
+* Message class:ZHR
+*000& & & & &
+*
+* Message class:ZHR02
+*040Não existem dados para os parametros especificados
+
+____-----------------------
+Extracted by Direct Test Program to Text File
